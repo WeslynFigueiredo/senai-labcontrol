@@ -101,14 +101,14 @@ const App = () => {
     const dateStr = new Date().toLocaleDateString();
     const timeStr = new Date().toLocaleTimeString();
     
+    // 1. Filtragem e Ordenação
     let reportData = targetLab === 'Todos' ? [...items] : items.filter(i => i.lab === targetLab);
-
     reportData.sort((a, b) => {
       const cmp = a.lab.localeCompare(b.lab);
       return cmp !== 0 ? cmp : a.category.localeCompare(b.category);
     });
 
-    // CÁLCULOS (Soma as quantidades físicas de cada status)
+    // 2. Cálculos para o Dashboard do PDF
     const totalUnidades = reportData.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
     const totalManutencao = reportData.filter(i => i.status === 'Manutenção').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
     const totalNaoOperacional = reportData.filter(i => i.status === 'Não Operacional').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
@@ -118,55 +118,83 @@ const App = () => {
     img.src = 'logo_senai.png'; 
 
     const render = () => {
+        // --- CABEÇALHO AZUL ---
         doc.setFillColor(0, 51, 153);
-        doc.rect(0, 0, 210, 45, 'F');
-        try { doc.addImage(img, 'PNG', 85, 5, 40, 15); } catch(e) {}
+        doc.rect(0, 0, 210, 40, 'F');
+        
+        try { doc.addImage(img, 'PNG', 85, 5, 40, 12); } catch(e) {}
         
         doc.setTextColor(255);
         doc.setFontSize(14);
-        doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
-        doc.setFontSize(8);
-        doc.text(`EMISSÃO: ${dateStr} às ${timeStr} | SENAI MACAPÁ`, 195, 20, { align: "right" });
+        doc.setFont("helvetica", "bold");
+        doc.text("CONTROLE LAB'S", 105, 28, { align: "center" });
+        
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
+        doc.text(`EMISSÃO: ${dateStr} às ${timeStr} | SENAI MACAPÁ`, 195, 10, { align: "right" });
 
+        // --- DESENHO DO DASHBOARD (CARDS) ---
         const drawCard = (x, y, w, h, title, val, color) => {
+            // Fundo do card (branco com borda cinza clara)
+            doc.setDrawColor(220, 220, 220);
             doc.setFillColor(255, 255, 255);
-            doc.setDrawColor(200, 200, 200);
             doc.roundedRect(x, y, w, h, 3, 3, 'FD');
+            
+            // Barrinha lateral colorida (idêntico ao sistema)
             doc.setFillColor(color[0], color[1], color[2]);
             doc.rect(x + 2, y + 5, 1.5, h - 10, 'F');
-            doc.setTextColor(100, 100, 100); doc.setFontSize(7);
+            
+            // Título do Card
+            doc.setTextColor(120, 120, 120);
+            doc.setFontSize(6);
+            doc.setFont("helvetica", "bold");
             doc.text(title.toUpperCase(), x + 6, y + 10);
-            doc.setTextColor(0, 0, 0); doc.setFontSize(16);
-            doc.text(val.toString(), x + 6, y + 20);
+            
+            // Valor do Card
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(16);
+            doc.text(val.toString(), x + 6, y + 22);
         };
 
-        // Ordem dos cards conforme seu layout
-        drawCard(15, 55, 42, 28, "Total Ativos", totalUnidades, [0, 51, 153]);
-        drawCard(62, 55, 42, 28, "Manutenção", totalManutencao, [200, 0, 0]);
-        drawCard(109, 55, 42, 28, "Não Operacional", totalNaoOperacional, [255, 165, 0]);
-        drawCard(156, 55, 42, 28, "Operacionais", totalOperacional, [0, 128, 0]);
+        // Renderizando os 4 cards lado a lado
+        const cardW = 43;
+        const cardH = 30;
+        const startY = 48;
 
+        drawCard(14, startY, cardW, cardH, "Total Ativos", totalUnidades, [0, 51, 153]);
+        drawCard(61, startY, cardW, cardH, "Manutenção", totalManutencao, [200, 0, 0]);
+        drawCard(108, startY, cardW, cardH, "Não Operacional", totalNaoOperacional, [255, 165, 0]);
+        drawCard(155, startY, cardW, cardH, "Operacionais", totalOperacional, [0, 128, 0]);
+
+        // --- TABELA DE ITENS ---
         autoTable(doc, {
-            startY: 95,
+            startY: 85,
             head: [['Ativo', 'Categoria', 'Laboratório', 'Qtd', 'Status']],
             body: reportData.map(i => [i.name, i.category, i.lab, i.quantity, i.status]),
-            headStyles: { fillColor: [0, 51, 153] },
+            headStyles: { fillColor: [0, 51, 153], fontSize: 8 },
+            styles: { fontSize: 7, cellPadding: 2 },
             didParseCell: (data) => {
-                // Se o status na coluna 4 for Manutenção ou Não Operacional, pinta a linha de vermelho
-                const statusText = data.row.cells[4].text[0];
-                if (data.section === 'body' && (statusText === 'Manutenção' || statusText === 'Não Operacional')) {
+                // Destaca linhas de manutenção ou não operacional em vermelho
+                if (data.section === 'body' && (data.row.raw[4] === 'Manutenção' || data.row.raw[4] === 'Não Operacional')) {
                     data.cell.styles.textColor = [200, 0, 0];
-                    data.cell.styles.fontStyle = 'bold';
                 }
             }
         });
 
-        const sigY = doc.lastAutoTable.finalY + 30;
-        doc.line(60, sigY, 150, sigY);
-        doc.text("Responsável Técnico / Instrutor", 105, sigY + 8, { align: "center" });
+        // Rodapé de Assinatura
+        const sigY = doc.lastAutoTable.finalY + 25;
+        if (sigY < 270) {
+            doc.setDrawColor(150);
+            doc.line(60, sigY, 150, sigY);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text("Responsável Técnico / Instrutor", 105, sigY + 5, { align: "center" });
+        }
+        
         doc.save(`Relatorio_${targetLab.replace(/\s+/g, '_')}.pdf`);
     };
-    img.onload = render; img.onerror = render;
+    img.onload = render;
+    img.onerror = render;
   };
 
   const stats = useMemo(() => ({
