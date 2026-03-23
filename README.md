@@ -1,70 +1,161 @@
-# Getting Started with Create React App
+# 🛠️ Controle Lab's \| SENAI Macapá (DR-AP)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Sistema profissional de **gestão de inventário e controle de ativos**
+desenvolvido para os laboratórios do **SENAI Macapá -- DR-AP**.\
+A ferramenta tem como foco a **auditoria técnica**, **controle de
+estoque crítico** e **geração de relatórios executivos**, oferecendo
+suporte estratégico à tomada de decisão institucional.
 
-## Available Scripts
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Firebase](https://img.shields.io/badge/firebase-%23039BE5.svg?style=for-the-badge&logo=firebase)
+![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
 
-In the project directory, you can run:
+------------------------------------------------------------------------
 
-### `npm start`
+## 📸 Demonstração do Sistema
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+  ---------------------------------------------------------------------------------------
+            Dashboard Operacional                       Inventário e Filtros
+  ----------------------------------------- ---------------------------------------------
+                 ![Dashboard                                ![Inventário
+   Geral](public/screenshot-dashboard.png)   Filtrado](public/screenshot-inventario.png)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+   *Visão em tempo real do volume total de     *Gestão de inventário com padronização
+     unidades e saúde dos laboratórios.*         automática e filtros inteligentes.*
+  ---------------------------------------------------------------------------------------
 
-### `npm test`
+  ----------------------------------------------------------------------------
+             Cadastro de Ativos                 Relatório Executivo (PDF)
+  ---------------------------------------- -----------------------------------
+                  ![Modal                              ![Relatório
+   Cadastro](public/screenshot-modal.png)    PDF](public/screenshot-pdf.png)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+    *Interface intuitiva com controle de       *Documento oficial com logo
+              estoque mínimo.*                   institucional e área de
+                                                      assinatura.*
+  ----------------------------------------------------------------------------
 
-### `npm run build`
+------------------------------------------------------------------------
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## 🚀 Funcionalidades Principais
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 📊 Dashboard Inteligente
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Diferente de sistemas comuns de listagem, o sistema calcula o **volume
+real de ativos** utilizando métodos como `reduce`, permitindo saber
+exatamente quantas unidades físicas existem no patrimônio (ex: 87
+computadores).
 
-### `npm run eject`
+### ✨ Padronização Automática de Dados
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Independente de como o usuário digita, o sistema aplica **capitalização
+automática** em nomes e categorias, mantendo o banco de dados organizado
+e padronizado.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 🔄 Sincronização em Tempo Real
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Integração com **Firebase Cloud Firestore**, garantindo que qualquer
+alteração no inventário seja refletida instantaneamente para todos os
+usuários conectados.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### 📄 Relatórios Executivos em PDF
 
-## Learn More
+Geração de relatórios institucionais prontos para auditoria e
+documentação:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+-   Relatório **Geral** ou **Filtrado por Laboratório**
+-   Cards de resumo com status do inventário
+-   Tabela consolidada por categoria
+-   Logo institucional centralizado (SENAI DR-AP)
+-   Data automática de emissão
+-   Área de assinatura do responsável técnico/instrutor
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 🛡️ Regras de Integridade de Dados
 
-### Code Splitting
+Sistema possui validações que impedem:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+-   Exclusão de laboratórios que possuem ativos vinculados
+-   Exclusão de categorias ainda utilizadas
+-   Inconsistências estruturais no banco de dados
 
-### Analyzing the Bundle Size
+------------------------------------------------------------------------
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 🛠️ Tecnologias Utilizadas
 
-### Making a Progressive Web App
+  Tecnologia               Finalidade
+  ------------------------ -------------------------------------------
+  **React.js**             Interface dinâmica baseada em componentes
+  **Tailwind CSS**         Estilização moderna e responsiva
+  **Lucide React**         Biblioteca de ícones
+  **Firebase Firestore**   Banco de dados NoSQL em tempo real
+  **jsPDF**                Geração de documentos PDF
+  **jsPDF-AutoTable**      Criação de tabelas estruturadas no PDF
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+------------------------------------------------------------------------
 
-### Advanced Configuration
+## 📦 Como Executar o Projeto Localmente
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+### 1️⃣ Clone o repositório
 
-### Deployment
+``` bash
+git clone https://github.com/weslyn-figueiredo/senai-labcontrol.git
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+### 2️⃣ Acesse a pasta do projeto
 
-### `npm run build` fails to minify
+``` bash
+cd senai-labcontrol
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### 3️⃣ Instale as dependências
+
+``` bash
+npm install
+```
+
+### 4️⃣ Inicie o servidor de desenvolvimento
+
+``` bash
+npm start
+```
+
+O sistema estará disponível em: http://localhost:3000
+
+------------------------------------------------------------------------
+
+## 📄 Scripts Disponíveis
+
+  Script           Descrição
+  ---------------- --------------------------------------
+  npm start        Inicia o ambiente de desenvolvimento
+  npm run build    Gera a versão otimizada do projeto
+  npm run deploy   Realiza o deploy para GitHub Pages
+
+------------------------------------------------------------------------
+
+## 📁 Estrutura das Imagens
+
+Coloque as imagens dentro da pasta:
+
+/public
+
+Com os nomes:
+
+screenshot-dashboard.png\
+screenshot-inventario.png\
+screenshot-modal.png\
+screenshot-pdf.png
+
+------------------------------------------------------------------------
+
+## 👨‍🏫 Autor
+
+Prof. Weslyn Figueiredo\
+Instrutor de Tecnologia da Informação\
+SENAI Macapá -- DR-AP
+
+------------------------------------------------------------------------
+
+## 📜 Licença
+
+Uso educacional e institucional.
