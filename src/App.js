@@ -9,7 +9,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// --- CONFIGURAÇÃO DO FIREBASE ---
+// --- CONFIGURAÇÃO DO FIREBASE (USANDO VARIÁVEIS DE AMBIENTE) ---
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -38,10 +38,12 @@ const App = () => {
   const [filterLab, setFilterLab] = useState('Todos');
   const [sortOrder, setSortOrder] = useState('name');
 
+  // ACESSIBILIDADE
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [fontSize, setFontSize] = useState(16);
 
+  // Modais
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, type: '', name: '', id: '' });
   const [editingItem, setEditingItem] = useState(null);
@@ -110,8 +112,6 @@ const App = () => {
         doc.setTextColor(255); doc.setFontSize(14); doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
         doc.setFontSize(8); doc.text(`EMISSÃO: ${dateStr} às ${timeStr} | SENAI MACAPÁ`, 195, 20, { align: "right" });
 
-        const tCrit = reportData.filter(i => i.quantity <= i.minQuantity).reduce((acc, curr) => acc + Number(curr.quantity), 0);
-        
         autoTable(doc, {
             startY: 55,
             head: [['Ativo', 'Categoria', 'Local', 'Qtd', 'Status']],
@@ -138,7 +138,7 @@ const App = () => {
 
   const filteredItems = useMemo(() => {
     let result = items.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) && (filterLab === 'Todos' || item.lab === filterLab));
-    return result.sort((a, b) => a[sortOrder].localeCompare(b[sortOrder]));
+    return result.sort((a, b) => a[sortOrder].toString().localeCompare(b[sortOrder].toString()));
   }, [items, searchQuery, filterLab, sortOrder]);
 
   const pageNames = { dashboard: 'Painel Geral', inventory: 'Inventário de Ativos', settings: 'Configurações' };
@@ -190,49 +190,52 @@ const App = () => {
           {activeTab === 'inventory' && (
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="flex flex-col md:flex-row justify-between gap-4">
-                <div className="flex flex-wrap gap-3">
-                  <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-3 text-slate-400" size={18} />
-                    <input type="text" placeholder="Buscar ativo..." className={`w-full pl-10 pr-4 py-2 border-2 rounded-xl outline-none transition-all ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 focus:border-blue-500')}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative w-full md:w-56">
+                    <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+                    <input type="text" placeholder="Buscar..." className={`w-full pl-9 pr-3 py-1.5 border-2 rounded-xl text-sm outline-none transition-all ${isHighContrast ? 'bg-black border-white' : 'dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                   </div>
-                  <div className="flex items-center gap-2 border-2 rounded-xl px-3 bg-white dark:bg-slate-900 dark:border-slate-700">
-                    <SortAsc size={16} className="text-slate-400" />
-                    <select className="bg-transparent font-bold outline-none border-none py-2 text-sm" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
-                        <option value="name">Ordem: Nome</option>
-                        <option value="category">Ordem: Categoria</option>
-                        <option value="lab">Ordem: Laboratório</option>
+                  <div className="flex items-center gap-2 border-2 rounded-xl px-2 bg-white dark:bg-slate-900 dark:border-slate-700">
+                    <SortAsc size={14} className="text-slate-400" />
+                    <select className="bg-transparent font-bold outline-none border-none py-1.5 text-xs" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+                        <option value="name">Nome</option>
+                        <option value="category">Categoria</option>
+                        <option value="lab">Laboratório</option>
                     </select>
                   </div>
-                  <select className={`px-4 py-2 border-2 rounded-xl outline-none font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200')}`} value={filterLab} onChange={(e) => setFilterLab(e.target.value)}>
+                  <select className={`px-2 py-1.5 border-2 rounded-xl text-xs font-bold outline-none ${isHighContrast ? 'bg-black border-white' : 'dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`} value={filterLab} onChange={(e) => setFilterLab(e.target.value)}>
                     <option value="Todos">Todos Lab's</option>
                     {labs.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
                   </select>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => exportToPDF(filterLab)} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 border-2 ${isHighContrast ? 'bg-white text-black border-white' : 'bg-slate-800 text-white border-transparent'}`}><Download size={18}/> PDF</button>
-                  <button onClick={() => {setEditingItem(null); setItemForm({name:'', category:categories[0]?.name||'', lab:labs[0]?.name||'', quantity:0, minQuantity:0, status:'Operacional'}); setIsItemModalOpen(true);}} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 border-2 ${isHighContrast ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent'}`}><Plus size={18}/> NOVO</button>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => exportToPDF(filterLab)} className={`px-4 py-1.5 rounded-xl font-bold flex items-center gap-2 text-xs border-2 transition-all ${isHighContrast ? 'bg-white text-black' : 'bg-slate-800 text-white border-transparent hover:bg-black'}`}><Download size={14}/> PDF</button>
+                  <button onClick={() => {setEditingItem(null); setItemForm({name:'', category:categories[0]?.name||'', lab:labs[0]?.name||'', quantity:0, minQuantity:0, status:'Operacional'}); setIsItemModalOpen(true);}} className={`px-4 py-1.5 rounded-xl font-bold flex items-center gap-2 text-xs border-2 transition-all ${isHighContrast ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent hover:bg-blue-800'}`}><Plus size={14}/> NOVO</button>
                 </div>
               </div>
-              <div className={`rounded-3xl border-2 overflow-hidden shadow-xl transition-all ${isHighContrast ? 'border-white bg-black' : (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}`}>
+
+              <div className={`rounded-[2rem] border-2 overflow-hidden shadow-xl transition-all ${isHighContrast ? 'border-white bg-black' : (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}`}>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left min-w-[600px]">
                     <thead className={isHighContrast ? 'bg-white text-black' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-400')}>
-                      <tr><th className="p-5 uppercase font-black text-xs">Item</th><th className="p-5 uppercase font-black text-xs text-center">Volume Físico</th><th className="p-5 uppercase font-black text-xs text-right">Ações</th></tr>
+                      <tr><th className="px-6 py-4 uppercase font-black text-[0.65em] tracking-widest">Item</th><th className="px-6 py-4 uppercase font-black text-[0.65em] text-center tracking-widest">Volume Físico</th><th className="px-6 py-4 uppercase font-black text-[0.65em] text-right tracking-widest">Ações</th></tr>
                     </thead>
-                    <tbody className={`divide-y-2 ${isHighContrast ? 'divide-white' : (isDarkMode ? 'divide-slate-100 dark:divide-slate-800' : 'divide-slate-100')}`}>
+                    <tbody className={`divide-y-2 ${isHighContrast ? 'divide-white' : (isDarkMode ? 'divide-slate-800' : 'divide-slate-100')}`}>
                       {filteredItems.map(item => (
-                        <tr key={item.id} className={`${isHighContrast ? 'hover:bg-yellow-900' : (isDarkMode ? 'hover:bg-slate-800/50 text-slate-300' : 'hover:bg-blue-50/20 text-slate-700')}`}>
-                          <td className="p-5 font-bold">
-                            <div className={isDarkMode && !isHighContrast ? 'text-white' : ''}>{item.name}</div>
-                            <span className={`block text-[0.7em] uppercase font-black ${isHighContrast ? 'text-yellow-400' : 'text-blue-500'}`}>{item.category} • {item.lab}</span>
+                        <tr key={item.id} className={`${isHighContrast ? 'hover:bg-yellow-900' : (isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-blue-50/20')}`}>
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-[0.9em]">{item.name}</div>
+                            <span className={`text-[0.65em] uppercase font-black ${isHighContrast ? 'text-yellow-400' : 'text-blue-500'}`}>{item.category} • {item.lab}</span>
                           </td>
-                          <td className="p-5 text-center font-black">
-                            {item.quantity} / {item.minQuantity}
-                            <div className={`text-[9px] uppercase mt-1 ${item.status === 'Manutenção' ? 'text-orange-500' : 'text-green-500'}`}>{item.status}</div>
+                          <td className="px-6 py-4 text-center">
+                            <div className="font-black text-[1em]">{item.quantity} / {item.minQuantity}</div>
+                            <div className={`text-[0.55em] font-black uppercase mt-1 ${item.status === 'Manutenção' ? 'text-orange-500' : 'text-green-500'}`}>{item.status}</div>
                           </td>
-                          <td className="p-5 text-right">
-                             <button onClick={()=>{setItemForm(item); setEditingItem(item); setIsItemModalOpen(true);}} className="p-2 text-blue-500 hover:scale-110 transition-transform"><Edit3 size={18}/></button>
-                             <button onClick={() => setConfirmDelete({open: true, type: 'items', id: item.id, name: item.name})} className="p-2 text-red-500 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                          <td className="px-6 py-4 text-right">
+                             <div className="flex justify-end gap-1">
+                               <button onClick={()=>{setItemForm(item); setEditingItem(item); setIsItemModalOpen(true);}} className="p-2 text-blue-500 hover:scale-110 transition-transform"><Edit3 size={16}/></button>
+                               <button onClick={() => setConfirmDelete({open: true, type: 'items', id: item.id, name: item.name})} className="p-2 text-red-500 hover:scale-110 transition-transform"><Trash2 size={16}/></button>
+                             </div>
                           </td>
                         </tr>
                       ))}
@@ -259,7 +262,7 @@ const App = () => {
               <h3 className={`text-xl font-black mb-2 uppercase ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Confirmar Exclusão?</h3>
               <p className={`mb-8 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Remover <strong>"{confirmDelete.name}"</strong>? Esta ação é irreversível.</p>
               <div className="flex flex-col gap-3">
-                <button onClick={executeDelete} className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest">Sim, Excluir</button>
+                <button onClick={executeDelete} className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Sim, Excluir</button>
                 <button onClick={()=>setConfirmDelete({open:false, type:'', name:'', id:''})} className={`p-4 rounded-2xl font-black uppercase text-xs ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>Cancelar</button>
               </div>
            </div>
@@ -275,12 +278,12 @@ const App = () => {
               <button onClick={()=>setIsItemModalOpen(false)}><X size={24}/></button>
             </div>
             <form onSubmit={handleSaveItem} className="p-6 space-y-4">
-              <input required className={`w-full p-4 border-2 rounded-xl font-bold outline-none ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.name} onChange={e=>setItemForm({...itemForm, name:e.target.value})} placeholder="Nome do Ativo"/>
+              <input required className={`w-full p-4 border-2 rounded-xl font-bold outline-none ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 focus:border-blue-500')}`} value={itemForm.name} onChange={e=>setItemForm({...itemForm, name:e.target.value})} placeholder="Nome do Ativo"/>
               <div className="grid grid-cols-2 gap-4">
                 <select className={`p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.category} onChange={e=>setItemForm({...itemForm, category:e.target.value})}>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select>
                 <select className={`p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.lab} onChange={e=>setItemForm({...itemForm, lab:e.target.value})}>{labs.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}</select>
               </div>
-              <select className={`w-full p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.status} onChange={e=>setItemForm({...itemForm, status:e.target.value})}>
+              <select className={`w-full p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 focus:border-blue-500')}`} value={itemForm.status} onChange={e=>setItemForm({...itemForm, status:e.target.value})}>
                   <option value="Operacional">Operacional</option>
                   <option value="Manutenção">Manutenção</option>
                   <option value="Reserva">Reserva</option>
@@ -289,7 +292,7 @@ const App = () => {
                 <input type="number" required className={`p-4 border-2 rounded-xl font-black ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.quantity} onChange={e=>setItemForm({...itemForm, quantity:e.target.value})} placeholder="Qtd Atual"/>
                 <input type="number" required className={`p-4 border-2 rounded-xl font-black ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.minQuantity} onChange={e=>setItemForm({...itemForm, minQuantity:e.target.value})} placeholder="Qtd Mínima"/>
               </div>
-              <button type="submit" className={`w-full p-5 rounded-2xl font-black transition-all ${isHighContrast ? 'bg-yellow-400 text-black' : 'bg-blue-900 text-white'}`}>SALVAR DADOS</button>
+              <button type="submit" className={`w-full p-5 rounded-2xl font-black transition-all ${isHighContrast ? 'bg-yellow-400 text-black border-white' : 'bg-blue-900 text-white hover:bg-blue-800'}`}>SALVAR DADOS</button>
             </form>
           </div>
         </div>
@@ -301,9 +304,9 @@ const App = () => {
 const NavItem = ({ icon, label, active, onClick, compact, isHC, isDark }) => (
   <button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all border-2 
     ${active 
-      ? (isHC ? 'bg-yellow-400 text-black border-white' : (isDark ? 'bg-blue-600 text-white border-transparent' : 'bg-blue-700 text-white border-transparent shadow-lg')) 
+      ? (isHC ? 'bg-yellow-400 text-black border-white' : (isDark ? 'bg-blue-600 text-white border-transparent shadow-lg' : 'bg-blue-700 text-white border-transparent shadow-lg')) 
       : (isHC ? 'text-white border-white hover:bg-yellow-900' : (isDark ? 'text-slate-400 border-transparent hover:bg-white/5' : 'text-blue-200 border-transparent hover:bg-white/10'))}`}>
-    <span className="shrink-0">{icon}</span> {!compact && <span className="font-black text-[0.85em] uppercase">{label}</span>}
+    <span className="shrink-0">{icon}</span> {!compact && <span className="font-black text-[0.8em] uppercase tracking-wide">{label}</span>}
   </button>
 );
 
@@ -311,16 +314,16 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, isHC, isDark }) => 
   const [val, setVal] = useState('');
   return (
     <div className={`p-8 rounded-[3rem] border-2 shadow-xl transition-all ${isHC ? 'bg-black border-white text-white' : (isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200')}`}>
-      <div className="flex items-center gap-4 mb-8 font-black text-[1.5em]"><div className={`p-3 rounded-xl ${isHC ? 'bg-yellow-400 text-black' : 'bg-blue-100 text-blue-600'}`}>{icon}</div> {title}</div>
+      <div className="flex items-center gap-4 mb-8 font-black text-[1.4em]"><div className={`p-3 rounded-xl ${isHC ? 'bg-yellow-400 text-black' : 'bg-blue-100 text-blue-600'}`}>{icon}</div> {title}</div>
       <div className="flex gap-3 mb-8">
-        <input className={`flex-1 p-4 border-2 rounded-2xl outline-none font-bold transition-all ${isHC ? 'bg-black border-white text-white' : (isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 focus:border-blue-500')}`} placeholder="Nome..." value={val} onChange={e=>setVal(e.target.value)}/>
-        <button onClick={()=>{if(val.trim()){onAdd(val);setVal('');}}} className={`px-8 rounded-2xl font-black border-2 transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent'}`}>ADD</button>
+        <input className={`flex-1 p-3 border-2 rounded-2xl outline-none font-bold transition-all ${isHC ? 'bg-black border-white text-white' : (isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 focus:border-blue-500')}`} placeholder="Nome..." value={val} onChange={e=>setVal(e.target.value)}/>
+        <button onClick={()=>{if(val.trim()){onAdd(val);setVal('');}}} className={`px-6 rounded-2xl font-black border-2 transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent hover:bg-blue-800'}`}>ADD</button>
       </div>
       <div className="flex flex-wrap gap-3">
         {list.map(i => (
-          <div key={i.id} className={`flex items-center gap-4 px-5 py-3 rounded-2xl border-2 transition-all ${isHC ? 'border-white hover:border-yellow-400' : (isDark ? 'border-slate-800 bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-700')}`}>
-            <span className="font-black text-[0.8em]">{i.name}</span>
-            <button onClick={()=>onDelete(i.name, i.id)} className="text-red-500 hover:scale-125 transition-transform"><X size={18}/></button>
+          <div key={i.id} className={`flex items-center gap-4 px-4 py-2 rounded-2xl border-2 transition-all ${isHC ? 'border-white hover:border-yellow-400' : (isDark ? 'border-slate-800 bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-700 shadow-sm')}`}>
+            <span className="font-black text-[0.75em]">{i.name}</span>
+            <button onClick={()=>onDelete(i.name, i.id)} className="text-red-500 hover:scale-125 transition-transform"><X size={16}/></button>
           </div>
         ))}
       </div>
@@ -331,27 +334,27 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, isHC, isDark }) => 
 const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
   <div className="space-y-10 max-w-7xl mx-auto">
     <div className="flex justify-between items-center px-2">
-        <h3 className={`font-black uppercase tracking-tighter ${isDark && !isHC ? 'text-white' : 'text-slate-800'}`} style={{ fontSize: '1.5em' }}>Resumo Geral</h3>
-        <button onClick={onExport} className={`p-4 rounded-2xl border-2 shadow-lg transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-slate-900 text-white border-transparent hover:bg-black'}`}><Download size={24}/></button>
+        <h3 className={`font-black uppercase tracking-tighter ${isDark && !isHC ? 'text-white' : 'text-slate-800'}`} style={{ fontSize: '1.4em' }}>Resumo Geral</h3>
+        <button onClick={onExport} className={`p-3 rounded-2xl border-2 shadow-lg transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-slate-900 text-white border-transparent hover:bg-black'}`}><Download size={20}/></button>
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-      <StatCard title="Unidades Totais" value={stats.total} icon={<Package size={26}/>} isHC={isHC} isDark={isDark} />
-      <StatCard title="Estoque Crítico" value={stats.lowStock} icon={<AlertTriangle size={26}/>} isHC={isHC} isDark={isDark} />
-      <StatCard title="Manutenção" value={stats.maintenance} icon={<Wrench size={26}/>} isHC={isHC} isDark={isDark} />
-      <StatCard title="Operacionais" value={stats.ok} icon={<CheckCircle2 size={26}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Unidades Totais" value={stats.total} icon={<Package size={24}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Estoque Crítico" value={stats.lowStock} icon={<AlertTriangle size={24}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Manutenção" value={stats.maintenance} icon={<Wrench size={24}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Operacionais" value={stats.ok} icon={<CheckCircle2 size={24}/>} isHC={isHC} isDark={isDark} />
     </div>
     <div className={`p-8 md:p-12 rounded-[3.5rem] border-2 shadow-2xl transition-all ${isHC ? 'bg-black border-white' : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}`}>
-      <h3 className={`font-black mb-8 uppercase flex items-center gap-4 ${isHC ? 'text-yellow-400' : 'text-red-500'}`} style={{ fontSize: '1.5em' }}><AlertCircle size={32}/> Reposição Urgente</h3>
+      <h3 className={`font-black mb-8 uppercase flex items-center gap-4 ${isHC ? 'text-yellow-400' : 'text-red-500'}`} style={{ fontSize: '1.4em' }}><AlertCircle size={28}/> Reposição Urgente</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {items.filter(i => i.quantity <= i.minQuantity).map(item => (
           <div key={item.id} className={`p-6 rounded-[2.5rem] border-2 flex flex-col justify-between transition-all hover:scale-[1.03] ${isHC ? 'border-white bg-black' : (isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 shadow-sm border-white')}`}>
             <div>
-              <div className={`font-black text-[1.1em] ${isDark && !isHC ? 'text-white' : 'text-slate-900'}`}>{item.name}</div>
-              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.lab}</div>
+              <div className={`font-black text-[1em] ${isDark && !isHC ? 'text-white' : 'text-slate-900'}`}>{item.name}</div>
+              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : 'text-slate-500 dark:text-slate-400'}`}>{item.lab}</div>
             </div>
             <div className={`mt-4 pt-4 border-t-2 flex justify-between ${isHC ? 'border-white' : 'border-current opacity-20'}`}>
-              <span className={`text-2xl font-black ${isHC ? 'text-yellow-400' : 'text-red-500'}`}>{item.quantity}</span>
-              <span className={`text-[0.6em] font-black uppercase self-end ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Mín: {item.minQuantity}</span>
+              <span className={`text-xl font-black ${isHC ? 'text-yellow-400' : 'text-red-500'}`}>{item.quantity}</span>
+              <span className={`text-[0.55em] font-black uppercase self-end ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Mín: {item.minQuantity}</span>
             </div>
           </div>
         ))}
@@ -361,9 +364,9 @@ const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
 );
 
 const StatCard = ({ title, value, icon, isHC, isDark }) => (
-  <div className={`p-8 rounded-[3rem] border-2 shadow-md flex items-start justify-between transition-all hover:shadow-xl ${isHC ? 'bg-black border-white' : (isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200')}`}>
-    <div><p className={`text-[0.6em] font-black uppercase mb-3 ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{title}</p><p className={`font-black ${isDark && !isHC ? 'text-white' : ''}`} style={{ fontSize: '2.5em' }}>{value}</p></div>
-    <div className={`p-5 rounded-[1.5rem] transition-all ${isHC ? 'bg-white text-black' : (isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>{icon}</div>
+  <div className={`p-6 rounded-[2.5rem] border-2 shadow-md flex items-start justify-between transition-all hover:shadow-xl ${isHC ? 'bg-black border-white' : (isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200')}`}>
+    <div><p className={`text-[0.55em] font-black uppercase mb-3 ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{title}</p><p className={`font-black ${isDark && !isHC ? 'text-white' : ''}`} style={{ fontSize: '2em' }}>{value}</p></div>
+    <div className={`p-4 rounded-[1.2rem] transition-all ${isHC ? 'bg-white text-black' : (isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>{icon}</div>
   </div>
 );
 
