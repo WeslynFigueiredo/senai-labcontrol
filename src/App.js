@@ -279,14 +279,52 @@ const Card = ({ title, value, icon, color }) => (
 
 const ConfigSection = ({ title, icon, onAdd, list, color="blue" }) => {
   const [val, setVal] = useState('');
+
+  const handleAdd = () => {
+    if (val.trim()) {
+      onAdd(val);
+      setVal('');
+    }
+  };
+
   return (
-    <div className="bg-white p-6 rounded-2xl border shadow-sm">
-      <div className="flex items-center gap-3 mb-4 font-bold text-lg">{icon} {title}</div>
-      <div className="flex gap-2 mb-4">
-        <input className="flex-1 border rounded-xl px-4 py-2" placeholder={`Novo ${title}...`} value={val} onChange={(e) => setVal(e.target.value)} />
-        <button onClick={() => { onAdd(val); setVal(''); }} className={`bg-${color}-600 text-white px-6 rounded-xl font-bold`}>Add</button>
+    <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm mb-6">
+      <div className="flex items-center gap-3 mb-6 font-bold text-xl text-slate-800">
+        <div className={`p-2 rounded-lg ${color === 'purple' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+          {icon}
+        </div>
+        {title}
       </div>
-      <div className="flex flex-wrap gap-2">{list.map(i => <span key={i} className="bg-slate-100 px-3 py-1 rounded-lg text-sm">{i}</span>)}</div>
+      
+      <div className="flex gap-3 mb-6">
+        <input 
+          className="flex-1 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+          placeholder={`Nome do novo ${title.toLowerCase()}...`} 
+          value={val} 
+          onChange={(e) => setVal(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
+        />
+        <button 
+          onClick={handleAdd} 
+          className={`px-6 rounded-xl font-bold text-white transition-all shadow-lg flex items-center gap-2 ${
+            color === 'purple' 
+              ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200' 
+              : 'bg-blue-700 hover:bg-blue-800 shadow-blue-200'
+          }`}
+        >
+          <Plus size={18} /> Cadastrar
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {list.length > 0 ? list.map((item, index) => (
+          <span key={index} className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 flex items-center gap-2">
+            {item}
+          </span>
+        )) : (
+          <p className="text-slate-400 text-sm italic">Nenhum registro cadastrado.</p>
+        )}
+      </div>
     </div>
   );
 }
