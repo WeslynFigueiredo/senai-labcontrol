@@ -23,6 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Função Capitalize Melhorada
 const capitalize = (str) => {
   if (!str) return "";
   return str.toLowerCase().split(' ').filter(w => w.length > 0).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -42,7 +43,7 @@ const App = () => {
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [fontSize, setFontSize] = useState(16);
 
-  // Modais
+  // Modais e Estados de Exclusão
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, type: '', name: '', id: '' });
   const [editingItem, setEditingItem] = useState(null);
@@ -55,6 +56,7 @@ const App = () => {
     return () => { unsubItems(); unsubLabs(); unsubCats(); };
   }, []);
 
+  // --- LOGICA DE CADASTRO COM REGRAS ESPECIFICAS ---
   const handleSaveItem = async (e) => {
     e.preventDefault();
     const data = { ...itemForm, name: capitalize(itemForm.name), quantity: Number(itemForm.quantity), minQuantity: Number(itemForm.minQuantity) };
@@ -62,6 +64,42 @@ const App = () => {
     else await addDoc(collection(db, "items"), data);
     setIsItemModalOpen(false);
     setEditingItem(null);
+  };
+
+  const addConfig = async (type, name) => {
+    let finalName = capitalize(name.trim());
+    
+    // Regra do Laboratório: Adiciona prefixo se não tiver
+    if (type === 'labs' && !finalName.toLowerCase().startsWith('laboratório de')) {
+      finalName = `Laboratório De ${finalName}`;
+    }
+
+    // Validação de Duplicados
+    const list = type === 'labs' ? labs : categories;
+    if (list.some(i => i.name.toLowerCase() === finalName.toLowerCase())) {
+      alert("Este nome já está cadastrado!");
+      return;
+    }
+
+    await addDoc(collection(db, type), { name: finalName });
+  };
+
+  const executeDelete = async () => {
+    const { type, id, name } = confirmDelete;
+    try {
+      if (type === 'items') {
+        await deleteDoc(doc(db, "items", id));
+      } else {
+        // Verifica se há itens vinculados antes de deletar lab ou categoria
+        const hasLinks = items.some(item => type === 'labs' ? item.lab === name : item.category === name);
+        if (hasLinks) {
+          alert("Não é possível excluir: existem itens vinculados a este registro.");
+          return;
+        }
+        await deleteDoc(doc(db, type, id));
+      }
+    } catch (e) { console.error(e); }
+    setConfirmDelete({ open: false, type: '', name: '', id: '' });
   };
 
   const exportToPDF = (targetLab = 'Todos') => {
@@ -82,8 +120,7 @@ const App = () => {
         doc.setFillColor(0, 51, 153); doc.rect(0, 0, 210, 45, 'F');
         try { doc.addImage(img, 'PNG', 85, 5, 40, 15); } catch(e) {}
         doc.setTextColor(255); doc.setFontSize(14); doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
-        doc.setFontSize(8);
-        doc.text(`EMISSÃO: ${dateStr} às ${timeStr}`, 195, 15, { align: "right" });
+        doc.setFontSize(8); doc.text(`EMISSÃO: ${dateStr} às ${timeStr}`, 195, 15, { align: "right" });
         doc.text("SENAI MACAPÁ - DR-AP", 195, 20, { align: "right" });
 
         const drawCard = (x, y, w, h, title, val, color) => {
@@ -149,7 +186,6 @@ const App = () => {
           <NavItem icon={<SettingsIcon size={24}/>} label="Config" active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); if(window.innerWidth < 768) setIsSidebarOpen(false); }} compact={!isSidebarOpen} isHC={isHighContrast} isDark={isDarkMode} />
         </nav>
 
-        {/* BOTÃO RECOLHER MENU (PC) */}
         <div className="p-5 hidden md:block">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`w-full flex items-center justify-center p-3 rounded-2xl border-2 transition-all ${isHighContrast ? 'border-white text-white' : 'border-transparent bg-white/10 text-white hover:bg-white/20'}`}>
              {isSidebarOpen ? <X size={20}/> : <Menu size={20}/>}
@@ -212,10 +248,13 @@ const App = () => {
                             <div className={isDarkMode && !isHighContrast ? 'text-white' : ''}>{item.name}</div>
                             <span className={`block text-[0.7em] uppercase font-black ${isHighContrast ? 'text-yellow-400' : 'text-blue-500'}`}>{item.category} • {item.lab}</span>
                           </td>
-                          <td className="p-5 text-center font-black">{item.quantity} / {item.minQuantity}</td>
+                          <td className="p-5 text-center font-black">
+                            {item.quantity} / {item.minQuantity}
+                            <div className={`text-[9px] uppercase mt-1 ${item.status === 'Manutenção' ? 'text-orange-500' : 'text-green-500'}`}>{item.status}</div>
+                          </td>
                           <td className="p-5 text-right">
                              <button onClick={()=>{setItemForm(item); setEditingItem(item); setIsItemModalOpen(true);}} className="p-2 text-blue-500 hover:scale-110 transition-transform"><Edit3 size={18}/></button>
-                             <button onClick={async()=>await deleteDoc(doc(db,"items",item.id))} className="p-2 text-red-500 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                             <button onClick={() => setConfirmDelete({open: true, type: 'items', id: item.id, name: item.name})} className="p-2 text-red-500 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
                           </td>
                         </tr>
                       ))}
@@ -228,14 +267,31 @@ const App = () => {
 
           {activeTab === 'settings' && (
              <div className="max-w-4xl mx-auto space-y-10">
-                <ConfigSection title="Laboratórios" icon={<Building2 />} onAdd={(v)=>addDoc(collection(db,"labs"),{name:capitalize(v)})} onDelete={(n,id)=>setConfirmDelete({open:true, type:'labs', name:n, id})} list={labs} isHC={isHighContrast} isDark={isDarkMode} />
-                <ConfigSection title="Categorias" icon={<Tags />} onAdd={(v)=>addDoc(collection(db,"categories"),{name:capitalize(v)})} onDelete={(n,id)=>setConfirmDelete({open:true, type:'categories', name:n, id})} list={categories} isHC={isHighContrast} isDark={isDarkMode} />
+                <ConfigSection title="Laboratórios" icon={<Building2 />} onAdd={(v)=>addConfig("labs", v)} onDelete={(n,id)=>setConfirmDelete({open:true, type:'labs', name:n, id})} list={labs} isHC={isHighContrast} isDark={isDarkMode} />
+                <ConfigSection title="Categorias" icon={<Tags />} onAdd={(v)=>addConfig("categories", v)} onDelete={(n,id)=>setConfirmDelete({open:true, type:'categories', name:n, id})} list={categories} isHC={isHighContrast} isDark={isDarkMode} />
              </div>
           )}
         </div>
       </main>
 
-      {/* MODAL ATIVO */}
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      {confirmDelete.open && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-6">
+           <div className={`max-w-sm w-full p-8 rounded-[2.5rem] text-center border-2 transition-all ${isHighContrast ? 'bg-black border-white' : (isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-transparent shadow-2xl')}`}>
+              <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertCircle size={40} className="text-red-600"/>
+              </div>
+              <h3 className={`text-xl font-black mb-2 uppercase ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Confirmar Exclusão?</h3>
+              <p className={`mb-8 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Você está prestes a remover <strong>"{confirmDelete.name}"</strong>. Esta ação não pode ser desfeita.</p>
+              <div className="flex flex-col gap-3">
+                <button onClick={executeDelete} className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Sim, Excluir</button>
+                <button onClick={()=>setConfirmDelete({open:false, type:'', name:'', id:''})} className={`p-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>Cancelar</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* MODAL ITEM CADASTRO/EDIÇÃO */}
       {isItemModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className={`w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden transition-all ${isHighContrast ? 'bg-black border-2 border-white' : isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white'}`}>
@@ -272,7 +328,7 @@ const NavItem = ({ icon, label, active, onClick, compact, isHC, isDark }) => (
   <button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all border-2 
     ${active 
       ? (isHC ? 'bg-yellow-400 text-black border-white' : (isDark ? 'bg-blue-600 text-white border-transparent' : 'bg-blue-700 text-white border-transparent shadow-lg')) 
-      : (isHC ? 'text-white border-white hover:bg-yellow-900' : 'text-blue-200 border-transparent hover:bg-white/10')}`}>
+      : (isHC ? 'text-white border-white hover:bg-yellow-900' : (isDark ? 'text-slate-400 border-transparent hover:bg-white/5' : 'text-blue-200 border-transparent hover:bg-white/10'))}`}>
     <span className="shrink-0">{icon}</span> {!compact && <span className="font-black text-[0.85em] uppercase">{label}</span>}
   </button>
 );
@@ -301,7 +357,7 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, isHC, isDark }) => 
 const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
   <div className="space-y-10 max-w-7xl mx-auto">
     <div className="flex justify-between items-center px-2">
-        <h3 className={`font-black uppercase tracking-tighter ${isDark && !isHC ? 'text-white' : ''}`} style={{ fontSize: '1.5em' }}>Resumo Geral</h3>
+        <h3 className={`font-black uppercase tracking-tighter ${isDark && !isHC ? 'text-white' : 'text-slate-800'}`} style={{ fontSize: '1.5em' }}>Resumo Geral</h3>
         <button onClick={onExport} className={`p-4 rounded-2xl border-2 shadow-lg transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-slate-900 text-white border-transparent hover:bg-black'}`}><Download size={24}/></button>
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -316,8 +372,8 @@ const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
         {items.filter(i => i.quantity <= i.minQuantity).map(item => (
           <div key={item.id} className={`p-6 rounded-[2.5rem] border-2 flex flex-col justify-between transition-all hover:scale-[1.03] ${isHC ? 'border-white bg-black' : (isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 shadow-sm border-white')}`}>
             <div>
-              <div className="font-black text-[1.1em]">{item.name}</div>
-              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : 'text-slate-500 dark:text-slate-400'}`}>{item.lab}</div>
+              <div className={`font-black text-[1.1em] ${isDark && !isHC ? 'text-white' : 'text-slate-900'}`}>{item.name}</div>
+              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.lab}</div>
             </div>
             <div className={`mt-4 pt-4 border-t-2 flex justify-between ${isHC ? 'border-white' : 'border-current opacity-20'}`}>
               <span className={`text-2xl font-black ${isHC ? 'text-yellow-400' : 'text-red-500'}`}>{item.quantity}</span>
@@ -332,7 +388,7 @@ const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
 
 const StatCard = ({ title, value, icon, isHC, isDark }) => (
   <div className={`p-8 rounded-[3rem] border-2 shadow-md flex items-start justify-between transition-all hover:shadow-xl ${isHC ? 'bg-black border-white' : (isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200')}`}>
-    <div><p className={`text-[0.6em] font-black uppercase mb-3 ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{title}</p><p className="font-black" style={{ fontSize: '2.5em' }}>{value}</p></div>
+    <div><p className={`text-[0.6em] font-black uppercase mb-3 ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{title}</p><p className={`font-black ${isDark && !isHC ? 'text-white' : ''}`} style={{ fontSize: '2.5em' }}>{value}</p></div>
     <div className={`p-5 rounded-[1.5rem] transition-all ${isHC ? 'bg-white text-black' : (isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>{icon}</div>
   </div>
 );
