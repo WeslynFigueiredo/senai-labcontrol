@@ -11,13 +11,13 @@ import autoTable from 'jspdf-autotable';
 
 // --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
-  apiKey: "AIzaSyAYbbKirfXBbn4dmuUXTDEHiTLYEP1kYAs",
-  authDomain: "senai-labcontrol.firebaseapp.com",
-  projectId: "senai-labcontrol",
-  storageBucket: "senai-labcontrol.firebasestorage.app",
-  messagingSenderId: "731990552263",
-  appId: "1:731990552263:web:e0c1690a64071eb069d8e2",
-  measurementId: "G-2KDFTP7TXF"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
