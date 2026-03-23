@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/senai-labcontrol/static/css/main.1595c6ff.css",
-    "main.js": "/senai-labcontrol/static/js/main.272d367c.js",
+    "main.js": "/senai-labcontrol/static/js/main.a1d73759.js",
     "static/js/239.b1201af5.chunk.js": "/senai-labcontrol/static/js/239.b1201af5.chunk.js",
     "static/js/977.8cf51a3e.chunk.js": "/senai-labcontrol/static/js/977.8cf51a3e.chunk.js",
     "static/js/732.78e0b23c.chunk.js": "/senai-labcontrol/static/js/732.78e0b23c.chunk.js",
     "static/js/453.ec982600.chunk.js": "/senai-labcontrol/static/js/453.ec982600.chunk.js",
     "index.html": "/senai-labcontrol/index.html",
     "main.1595c6ff.css.map": "/senai-labcontrol/static/css/main.1595c6ff.css.map",
-    "main.272d367c.js.map": "/senai-labcontrol/static/js/main.272d367c.js.map",
+    "main.a1d73759.js.map": "/senai-labcontrol/static/js/main.a1d73759.js.map",
     "239.b1201af5.chunk.js.map": "/senai-labcontrol/static/js/239.b1201af5.chunk.js.map",
     "977.8cf51a3e.chunk.js.map": "/senai-labcontrol/static/js/977.8cf51a3e.chunk.js.map",
     "732.78e0b23c.chunk.js.map": "/senai-labcontrol/static/js/732.78e0b23c.chunk.js.map",
@@ -16,6 +16,6 @@
   },
   "entrypoints": [
     "static/css/main.1595c6ff.css",
-    "static/js/main.272d367c.js"
+    "static/js/main.a1d73759.js"
   ]
 }
