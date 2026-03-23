@@ -2,7 +2,7 @@
   "name": "senai-labcontrol",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://github.com/WeslynFigueiredo/senai-labcontrol",
+  "homepage": "https://WeslynFigueiredo.github.io/senai-labcontrol",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -41,5 +41,10 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19"
   }
 }
