@@ -9,7 +9,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// --- CONFIGURAÇÃO DO FIREBASE (USANDO VARIÁVEIS DE AMBIENTE) ---
+// --- CONFIGURAÇÃO DO FIREBASE (SEGURANÇA POR VARIÁVEIS DE AMBIENTE) ---
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -23,6 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Função para padronizar textos (Primeira Letra Maiúscula)
 const capitalize = (str) => {
   if (!str) return "";
   return str.toLowerCase().split(' ').filter(w => w.length > 0).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -38,17 +39,18 @@ const App = () => {
   const [filterLab, setFilterLab] = useState('Todos');
   const [sortOrder, setSortOrder] = useState('name');
 
-  // ACESSIBILIDADE
+  // ESTADOS DE ACESSIBILIDADE
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [fontSize, setFontSize] = useState(16);
 
-  // Modais
+  // ESTADOS DE MODAIS E FORMULÁRIOS
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, type: '', name: '', id: '' });
   const [editingItem, setEditingItem] = useState(null);
   const [itemForm, setItemForm] = useState({ name: '', category: '', lab: '', quantity: 0, minQuantity: 0, status: 'Operacional' });
 
+  // Sincronização em tempo real com Firebase
   useEffect(() => {
     const unsubItems = onSnapshot(collection(db, "items"), (s) => setItems(s.docs.map(d => ({ ...d.data(), id: d.id }))));
     const unsubLabs = onSnapshot(collection(db, "labs"), (s) => setLabs(s.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => a.name.localeCompare(b.name))));
@@ -56,6 +58,7 @@ const App = () => {
     return () => { unsubItems(); unsubLabs(); unsubCats(); };
   }, []);
 
+  // --- LÓGICA DE NEGÓCIO ---
   const handleSaveItem = async (e) => {
     e.preventDefault();
     const data = { ...itemForm, name: capitalize(itemForm.name), quantity: Number(itemForm.quantity), minQuantity: Number(itemForm.minQuantity) };
@@ -72,7 +75,7 @@ const App = () => {
     }
     const list = type === 'labs' ? labs : categories;
     if (list.some(i => i.name.toLowerCase() === finalName.toLowerCase())) {
-      alert("Este nome já está cadastrado!");
+      alert("Registro já existente!");
       return;
     }
     await addDoc(collection(db, type), { name: finalName });
@@ -83,7 +86,7 @@ const App = () => {
     if (type !== 'items') {
       const hasLinks = items.some(item => type === 'labs' ? item.lab === name : item.category === name);
       if (hasLinks) {
-        alert("Não é possível excluir: existem itens vinculados.");
+        alert("Não é possível excluir: existem ativos vinculados a este registro.");
         setConfirmDelete({ open: false, type: '', name: '', id: '' });
         return;
       }
@@ -92,10 +95,12 @@ const App = () => {
     setConfirmDelete({ open: false, type: '', name: '', id: '' });
   };
 
+  // --- RELATÓRIO PDF ---
   const exportToPDF = (targetLab = 'Todos') => {
     const doc = new jsPDF();
     const dateStr = new Date().toLocaleDateString();
     const timeStr = new Date().toLocaleTimeString();
+    
     let reportData = targetLab === 'Todos' ? [...items] : items.filter(i => i.lab === targetLab);
 
     reportData.sort((a, b) => {
@@ -103,28 +108,63 @@ const App = () => {
       return cmp !== 0 ? cmp : a.category.localeCompare(b.category);
     });
 
+    // CÁLCULOS (Soma as quantidades físicas de cada status)
     const totalUnidades = reportData.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
-    const img = new Image(); img.src = 'logo_senai.png'; 
+    const totalManutencao = reportData.filter(i => i.status === 'Manutenção').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+    const totalNaoOperacional = reportData.filter(i => i.status === 'Não Operacional').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+    const totalOperacional = reportData.filter(i => i.status === 'Operacional').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+
+    const img = new Image();
+    img.src = 'logo_senai.png'; 
 
     const render = () => {
-        doc.setFillColor(0, 51, 153); doc.rect(0, 0, 210, 45, 'F');
+        doc.setFillColor(0, 51, 153);
+        doc.rect(0, 0, 210, 45, 'F');
         try { doc.addImage(img, 'PNG', 85, 5, 40, 15); } catch(e) {}
-        doc.setTextColor(255); doc.setFontSize(14); doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
-        doc.setFontSize(8); doc.text(`EMISSÃO: ${dateStr} às ${timeStr} | SENAI MACAPÁ`, 195, 20, { align: "right" });
+        
+        doc.setTextColor(255);
+        doc.setFontSize(14);
+        doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
+        doc.setFontSize(8);
+        doc.text(`EMISSÃO: ${dateStr} às ${timeStr} | SENAI MACAPÁ`, 195, 20, { align: "right" });
+
+        const drawCard = (x, y, w, h, title, val, color) => {
+            doc.setFillColor(255, 255, 255);
+            doc.setDrawColor(200, 200, 200);
+            doc.roundedRect(x, y, w, h, 3, 3, 'FD');
+            doc.setFillColor(color[0], color[1], color[2]);
+            doc.rect(x + 2, y + 5, 1.5, h - 10, 'F');
+            doc.setTextColor(100, 100, 100); doc.setFontSize(7);
+            doc.text(title.toUpperCase(), x + 6, y + 10);
+            doc.setTextColor(0, 0, 0); doc.setFontSize(16);
+            doc.text(val.toString(), x + 6, y + 20);
+        };
+
+        // Ordem dos cards conforme seu layout
+        drawCard(15, 55, 42, 28, "Total Ativos", totalUnidades, [0, 51, 153]);
+        drawCard(62, 55, 42, 28, "Manutenção", totalManutencao, [200, 0, 0]);
+        drawCard(109, 55, 42, 28, "Não Operacional", totalNaoOperacional, [255, 165, 0]);
+        drawCard(156, 55, 42, 28, "Operacionais", totalOperacional, [0, 128, 0]);
 
         autoTable(doc, {
-            startY: 55,
-            head: [['Ativo', 'Categoria', 'Local', 'Qtd', 'Status']],
+            startY: 95,
+            head: [['Ativo', 'Categoria', 'Laboratório', 'Qtd', 'Status']],
             body: reportData.map(i => [i.name, i.category, i.lab, i.quantity, i.status]),
             headStyles: { fillColor: [0, 51, 153] },
             didParseCell: (data) => {
-                if (data.section === 'body' && data.row.cells[4].text[0] === 'Manutenção') {
+                // Se o status na coluna 4 for Manutenção ou Não Operacional, pinta a linha de vermelho
+                const statusText = data.row.cells[4].text[0];
+                if (data.section === 'body' && (statusText === 'Manutenção' || statusText === 'Não Operacional')) {
                     data.cell.styles.textColor = [200, 0, 0];
                     data.cell.styles.fontStyle = 'bold';
                 }
             }
         });
-        doc.save(`Relatorio_${targetLab}.pdf`);
+
+        const sigY = doc.lastAutoTable.finalY + 30;
+        doc.line(60, sigY, 150, sigY);
+        doc.text("Responsável Técnico / Instrutor", 105, sigY + 8, { align: "center" });
+        doc.save(`Relatorio_${targetLab.replace(/\s+/g, '_')}.pdf`);
     };
     img.onload = render; img.onerror = render;
   };
@@ -146,6 +186,7 @@ const App = () => {
   return (
     <div className={`h-screen flex font-sans transition-all duration-300 overflow-hidden ${isHighContrast ? 'bg-black text-white' : isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`} style={{ fontSize: fontSize + 'px' }}>
       
+      {/* SIDEBAR */}
       <aside className={`fixed md:relative z-[100] h-screen transition-all duration-300 flex flex-col shadow-2xl shrink-0 
         ${isHighContrast ? 'bg-black border-r-2 border-white' : isDarkMode ? 'bg-slate-900 border-r border-slate-800' : 'bg-blue-900 text-white'} 
         ${isSidebarOpen ? 'translate-x-0 w-80' : '-translate-x-full md:translate-x-0 md:w-24'}`}>
@@ -171,6 +212,7 @@ const App = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* HEADER */}
         <header className={`h-20 border-b flex items-center justify-between px-6 md:px-10 shrink-0 sticky top-0 z-30 backdrop-blur-md ${isHighContrast ? 'bg-black border-white' : isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200'}`}>
           <div className="w-1/4 flex items-center">
             <button className={`p-2 rounded-lg md:hidden ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`} onClick={() => setIsSidebarOpen(true)}><Menu size={20} /></button>
@@ -187,15 +229,16 @@ const App = () => {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-10 pb-20">
           {activeTab === 'dashboard' && <Dashboard stats={stats} items={items} isHC={isHighContrast} isDark={isDarkMode} onExport={() => exportToPDF('Todos')} />}
+          
           {activeTab === 'inventory' && (
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="flex flex-col md:flex-row justify-between gap-4">
                 <div className="flex flex-wrap gap-3 items-center">
                   <div className="relative w-full md:w-56">
                     <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-                    <input type="text" placeholder="Buscar..." className={`w-full pl-9 pr-3 py-1.5 border-2 rounded-xl text-sm outline-none transition-all ${isHighContrast ? 'bg-black border-white' : 'dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="Buscar..." className={`w-full pl-9 pr-3 py-1.5 border-2 rounded-xl text-sm outline-none transition-all ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 focus:border-blue-500')}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                   </div>
-                  <div className="flex items-center gap-2 border-2 rounded-xl px-2 bg-white dark:bg-slate-900 dark:border-slate-700">
+                  <div className="flex items-center gap-2 border-2 rounded-xl px-2 bg-white dark:bg-slate-900 dark:border-slate-700 h-[38px]">
                     <SortAsc size={14} className="text-slate-400" />
                     <select className="bg-transparent font-bold outline-none border-none py-1.5 text-xs" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
                         <option value="name">Nome</option>
@@ -203,14 +246,14 @@ const App = () => {
                         <option value="lab">Laboratório</option>
                     </select>
                   </div>
-                  <select className={`px-2 py-1.5 border-2 rounded-xl text-xs font-bold outline-none ${isHighContrast ? 'bg-black border-white' : 'dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`} value={filterLab} onChange={(e) => setFilterLab(e.target.value)}>
+                  <select className={`px-2 h-[38px] border-2 rounded-xl text-xs font-bold outline-none ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200')}`} value={filterLab} onChange={(e) => setFilterLab(e.target.value)}>
                     <option value="Todos">Todos Lab's</option>
                     {labs.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
                   </select>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={() => exportToPDF(filterLab)} className={`px-4 py-1.5 rounded-xl font-bold flex items-center gap-2 text-xs border-2 transition-all ${isHighContrast ? 'bg-white text-black' : 'bg-slate-800 text-white border-transparent hover:bg-black'}`}><Download size={14}/> PDF</button>
-                  <button onClick={() => {setEditingItem(null); setItemForm({name:'', category:categories[0]?.name||'', lab:labs[0]?.name||'', quantity:0, minQuantity:0, status:'Operacional'}); setIsItemModalOpen(true);}} className={`px-4 py-1.5 rounded-xl font-bold flex items-center gap-2 text-xs border-2 transition-all ${isHighContrast ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent hover:bg-blue-800'}`}><Plus size={14}/> NOVO</button>
+                  <button onClick={() => exportToPDF(filterLab)} className={`px-4 h-[42px] rounded-xl font-bold flex items-center gap-2 text-xs border-2 transition-all ${isHighContrast ? 'bg-white text-black border-white' : 'bg-slate-800 text-white border-transparent hover:bg-black'}`}><Download size={14}/> PDF</button>
+                  <button onClick={() => {setEditingItem(null); setItemForm({name:'', category:categories[0]?.name||'', lab:labs[0]?.name||'', quantity:0, minQuantity:0, status:'Operacional'}); setIsItemModalOpen(true);}} className={`px-4 h-[42px] rounded-xl font-bold flex items-center gap-2 text-xs border-2 transition-all ${isHighContrast ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent hover:bg-blue-800'}`}><Plus size={14}/> NOVO</button>
                 </div>
               </div>
 
@@ -222,7 +265,7 @@ const App = () => {
                     </thead>
                     <tbody className={`divide-y-2 ${isHighContrast ? 'divide-white' : (isDarkMode ? 'divide-slate-800' : 'divide-slate-100')}`}>
                       {filteredItems.map(item => (
-                        <tr key={item.id} className={`${isHighContrast ? 'hover:bg-yellow-900' : (isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-blue-50/20')}`}>
+                        <tr key={item.id} className={`${isHighContrast ? 'hover:bg-yellow-900' : (isDarkMode ? 'hover:bg-slate-800/50 text-slate-300' : 'hover:bg-blue-50/20 text-slate-700')}`}>
                           <td className="px-6 py-4">
                             <div className="font-bold text-[0.9em]">{item.name}</div>
                             <span className={`text-[0.65em] uppercase font-black ${isHighContrast ? 'text-yellow-400' : 'text-blue-500'}`}>{item.category} • {item.lab}</span>
@@ -245,6 +288,7 @@ const App = () => {
               </div>
             </div>
           )}
+
           {activeTab === 'settings' && (
              <div className="max-w-4xl mx-auto space-y-10">
                 <ConfigSection title="Laboratórios" icon={<Building2 />} onAdd={(v)=>addConfig("labs", v)} onDelete={(n,id)=>setConfirmDelete({open:true, type:'labs', name:n, id})} list={labs} isHC={isHighContrast} isDark={isDarkMode} />
@@ -257,19 +301,19 @@ const App = () => {
       {/* MODAL EXCLUSÃO */}
       {confirmDelete.open && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-6">
-           <div className={`max-w-sm w-full p-8 rounded-[2.5rem] text-center border-2 ${isHighContrast ? 'bg-black border-white' : (isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white shadow-2xl')}`}>
+           <div className={`max-w-sm w-full p-8 rounded-[2.5rem] text-center border-2 transition-all ${isHighContrast ? 'bg-black border-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white shadow-2xl')}`}>
               <AlertCircle size={48} className="mx-auto text-red-600 mb-4"/>
-              <h3 className={`text-xl font-black mb-2 uppercase ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Confirmar Exclusão?</h3>
-              <p className={`mb-8 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Remover <strong>"{confirmDelete.name}"</strong>? Esta ação é irreversível.</p>
+              <h3 className="text-xl font-black mb-2 uppercase">Confirmar Exclusão?</h3>
+              <p className="mb-8 font-medium opacity-60">Deseja remover "{confirmDelete.name}"? Esta ação não pode ser desfeita.</p>
               <div className="flex flex-col gap-3">
-                <button onClick={executeDelete} className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Sim, Excluir</button>
+                <button onClick={executeDelete} className="p-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black uppercase text-xs transition-all">Sim, Excluir</button>
                 <button onClick={()=>setConfirmDelete({open:false, type:'', name:'', id:''})} className={`p-4 rounded-2xl font-black uppercase text-xs ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>Cancelar</button>
               </div>
            </div>
         </div>
       )}
 
-      {/* MODAL ITEM */}
+      {/* MODAL ATIVO */}
       {isItemModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className={`w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden transition-all ${isHighContrast ? 'bg-black border-2 border-white' : isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white'}`}>
@@ -286,7 +330,7 @@ const App = () => {
               <select className={`w-full p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 focus:border-blue-500')}`} value={itemForm.status} onChange={e=>setItemForm({...itemForm, status:e.target.value})}>
                   <option value="Operacional">Operacional</option>
                   <option value="Manutenção">Manutenção</option>
-                  <option value="Reserva">Reserva</option>
+                  <option value="Não Operacional">Não Operacional</option>
               </select>
               <div className="grid grid-cols-2 gap-4">
                 <input type="number" required className={`p-4 border-2 rounded-xl font-black ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.quantity} onChange={e=>setItemForm({...itemForm, quantity:e.target.value})} placeholder="Qtd Atual"/>
@@ -317,13 +361,13 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, isHC, isDark }) => 
       <div className="flex items-center gap-4 mb-8 font-black text-[1.4em]"><div className={`p-3 rounded-xl ${isHC ? 'bg-yellow-400 text-black' : 'bg-blue-100 text-blue-600'}`}>{icon}</div> {title}</div>
       <div className="flex gap-3 mb-8">
         <input className={`flex-1 p-3 border-2 rounded-2xl outline-none font-bold transition-all ${isHC ? 'bg-black border-white text-white' : (isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 focus:border-blue-500')}`} placeholder="Nome..." value={val} onChange={e=>setVal(e.target.value)}/>
-        <button onClick={()=>{if(val.trim()){onAdd(val);setVal('');}}} className={`px-6 rounded-2xl font-black border-2 transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent hover:bg-blue-800'}`}>ADD</button>
+        <button onClick={()=>{if(val.trim()){onAdd(val);setVal('');}}} className={`px-6 rounded-2xl font-black border-2 transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent'}`}>ADD</button>
       </div>
       <div className="flex flex-wrap gap-3">
         {list.map(i => (
           <div key={i.id} className={`flex items-center gap-4 px-4 py-2 rounded-2xl border-2 transition-all ${isHC ? 'border-white hover:border-yellow-400' : (isDark ? 'border-slate-800 bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-700 shadow-sm')}`}>
             <span className="font-black text-[0.75em]">{i.name}</span>
-            <button onClick={()=>onDelete(i.name, i.id)} className="text-red-500 hover:scale-125 transition-transform"><X size={16}/></button>
+            <button onClick={() => onDelete(i.name, i.id)} className="text-red-500 hover:scale-125 transition-transform"><X size={16}/></button>
           </div>
         ))}
       </div>
@@ -350,7 +394,7 @@ const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
           <div key={item.id} className={`p-6 rounded-[2.5rem] border-2 flex flex-col justify-between transition-all hover:scale-[1.03] ${isHC ? 'border-white bg-black' : (isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 shadow-sm border-white')}`}>
             <div>
               <div className={`font-black text-[1em] ${isDark && !isHC ? 'text-white' : 'text-slate-900'}`}>{item.name}</div>
-              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : 'text-slate-500 dark:text-slate-400'}`}>{item.lab}</div>
+              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{item.lab}</div>
             </div>
             <div className={`mt-4 pt-4 border-t-2 flex justify-between ${isHC ? 'border-white' : 'border-current opacity-20'}`}>
               <span className={`text-xl font-black ${isHC ? 'text-yellow-400' : 'text-red-500'}`}>{item.quantity}</span>
