@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
 import { 
-  getFirestore, collection, addDoc, getDocs, 
-  updateDoc, deleteDoc, doc, onSnapshot, query, where 
-} from "firebase/firestore";
-import { 
-  LayoutDashboard, Package, Search, Plus, Wrench, 
-  CheckCircle2, Filter, Trash2, Edit3, Menu, X, 
-  User, Settings as SettingsIcon, AlertTriangle, Building2, Tags, 
-  AlertCircle, Download, FileText
+  LayoutDashboard, Package, Search, Plus, Wrench, CheckCircle2, Filter, Trash2, Edit3, 
+  Menu, X, Settings as SettingsIcon, AlertTriangle, Building2, Tags, AlertCircle, 
+  Download, Sun, Moon, Type, Contrast 
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -37,21 +33,20 @@ const App = () => {
   const [items, setItems] = useState([]);
   const [labs, setLabs] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLab, setFilterLab] = useState('Todos');
-  
+
+  // ACESSIBILIDADE
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isHighContrast, setIsHighContrast] = useState(false);
+  const [fontSize, setFontSize] = useState(16);
+
+  // Modais
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, type: '', name: '', id: '' });
   const [editingItem, setEditingItem] = useState(null);
-  const [itemForm, setItemForm] = useState({
-    name: '', category: '', lab: '', quantity: 0, minQuantity: 0, status: 'Operacional'
-  });
-
-  useEffect(() => {
-    const titles = { dashboard: "Painel Geral | Controle Lab's", inventory: "Inventário | Controle Lab's", settings: "Configurações | Controle Lab's" };
-    document.title = titles[activeTab] || "Controle Lab's";
-  }, [activeTab]);
+  const [itemForm, setItemForm] = useState({ name: '', category: '', lab: '', quantity: 0, minQuantity: 0, status: 'Operacional' });
 
   useEffect(() => {
     const unsubItems = onSnapshot(collection(db, "items"), (s) => setItems(s.docs.map(d => ({ ...d.data(), id: d.id }))));
@@ -60,146 +55,63 @@ const App = () => {
     return () => { unsubItems(); unsubLabs(); unsubCats(); };
   }, []);
 
-  // --- FUNÇÃO DE EXPORTAÇÃO TURBO (COM SOMA REAL E LOGO CENTRALIZADA) ---
-  const exportToPDF = (targetLab = 'Todos') => {
-    const doc = new jsPDF();
-    const dateStr = new Date().toLocaleDateString();
-    const timeStr = new Date().toLocaleTimeString();
-    
-    // 1. Filtragem e Cálculos de Volume Real
-    const reportData = targetLab === 'Todos' ? items : items.filter(i => i.lab === targetLab);
-    const totalUnidades = reportData.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
-    const totalCritico = reportData.filter(i => i.quantity <= i.minQuantity).reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
-    const totalManutencao = reportData.filter(i => i.status === 'Manutenção').reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
-    const totalOperacional = reportData.filter(i => i.status === 'Operacional' && i.quantity > i.minQuantity).reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
-
-    // --- CABEÇALHO INSTITUCIONAL ---
-    doc.setFillColor(0, 51, 153); // Azul SENAI
-    doc.rect(0, 0, 210, 45, 'F');
-    
-    // Logo Centralizada
-    const imgLogo = new Image();
-    imgLogo.src = 'logo_senai.png'; 
-    try {
-        doc.addImage(imgLogo, 'PNG', 85, 5, 40, 15); 
-    } catch (e) {
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(22);
-        doc.text("SENAI", 105, 15, { align: "center" });
-    }
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
-
-    // Dados de Emissão no Canto Direito
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(`EMISSÃO: ${dateStr} às ${timeStr}`, 195, 15, { align: "right" });
-    doc.text("SENAI MACAPÁ - DR-AP", 195, 20, { align: "right" });
-    doc.text(`FILTRO: ${targetLab.toUpperCase()}`, 195, 25, { align: "right" });
-
-    // --- CARDS DO RESUMO (DASHBOARD NO PDF) ---
-    const drawCard = (x, y, w, h, title, val, color) => {
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(x, y, w, h, 3, 3, 'FD');
-        doc.setDrawColor(color[0], color[1], color[2]);
-        doc.setLineWidth(1);
-        doc.line(x + 2, y + 5, x + 2, y + h - 5);
-        doc.setTextColor(100, 100, 100);
-        doc.setFontSize(7);
-        doc.text(title.toUpperCase(), x + 5, y + 8);
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(14);
-        doc.text(val.toString(), x + 5, y + 18);
-    };
-
-    drawCard(15, 55, 42, 25, "Total Unidades", totalUnidades, [0, 51, 153]);
-    drawCard(62, 55, 42, 25, "Qtd. Crítica", totalCritico, [200, 0, 0]);
-    drawCard(109, 55, 42, 25, "Qtd. Manutenção", totalManutencao, [255, 150, 0]);
-    drawCard(156, 55, 42, 25, "Qtd. Operacional", totalOperacional, [0, 150, 0]);
-
-    // --- TABELA: RESUMO POR CATEGORIA ---
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("RESUMO POR CATEGORIA", 15, 95);
-
-    const categoriesSum = {};
-    reportData.forEach(i => {
-      categoriesSum[i.category] = (categoriesSum[i.category] || 0) + Number(i.quantity);
-    });
-    const categoryRows = Object.keys(categoriesSum).map(cat => [cat, categoriesSum[cat]]);
-
-    autoTable(doc, {
-      startY: 100,
-      head: [['Categoria', 'Soma das Unidades']],
-      body: categoryRows,
-      headStyles: { fillColor: [60, 60, 60] },
-      styles: { fontSize: 9 }
-    });
-
-    // --- TABELA: LISTAGEM DETALHADA ---
-    doc.setFontSize(12);
-    doc.text(`LISTAGEM DETALHADA - ${targetLab}`, 15, doc.lastAutoTable.finalY + 15);
-
-    autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 20,
-        head: [['Ativo', 'Categoria', 'Laboratório', 'Qtd', 'Status']],
-        body: reportData.map(i => [i.name, i.category, i.lab, i.quantity, i.status]),
-        headStyles: { fillColor: [0, 51, 153] },
-        styles: { fontSize: 8 },
-        columnStyles: { 3: { halign: 'center' } }
-    });
-
-    // --- ASSINATURA ---
-    const finalY = doc.lastAutoTable.finalY + 35;
-    const signatureY = finalY > 270 ? 40 : finalY;
-    if (finalY > 270) doc.addPage();
-    
-    doc.setDrawColor(0, 0, 0);
-    doc.line(60, signatureY, 150, signatureY);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Responsável Técnico / Instrutor", 105, signatureY + 8, { align: "center" });
-
-    doc.save(`Relatorio_${targetLab}_${dateStr}.pdf`);
-  };
-
   const handleSaveItem = async (e) => {
     e.preventDefault();
-    const data = { ...itemForm, name: capitalize(itemForm.name) };
+    const data = { ...itemForm, name: capitalize(itemForm.name), quantity: Number(itemForm.quantity), minQuantity: Number(itemForm.minQuantity) };
     if (editingItem) await updateDoc(doc(db, "items", editingItem.id), data);
     else await addDoc(collection(db, "items"), data);
     setIsItemModalOpen(false);
     setEditingItem(null);
   };
 
-  const addConfig = async (type, name) => {
-    if (!name.trim()) return;
-    await addDoc(collection(db, type), { name: capitalize(name.trim()) });
-  };
+  const exportToPDF = (targetLab = 'Todos') => {
+    const doc = new jsPDF();
+    const dateStr = new Date().toLocaleDateString();
+    const timeStr = new Date().toLocaleTimeString();
+    let reportData = targetLab === 'Todos' ? [...items] : items.filter(i => i.lab === targetLab);
 
-  const executeDeleteConfig = async () => {
-    const { type, name, id } = confirmDelete;
-    if (items.some(item => type === 'labs' ? item.lab === name : item.category === name)) {
-      alert(`O(A) ${name} possui itens vinculados.`);
-      return;
-    }
-    await deleteDoc(doc(db, type, id));
-    setConfirmDelete({ open: false, type: '', name: '', id: '' });
-  };
-
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesLab = filterLab === 'Todos' || item.lab === filterLab;
-      return matchesSearch && matchesLab;
+    reportData.sort((a, b) => {
+      const cmp = a.lab.localeCompare(b.lab);
+      return cmp !== 0 ? cmp : a.category.localeCompare(b.category);
     });
-  }, [items, searchQuery, filterLab]);
 
-  // Estatísticas Reais para o Dashboard (Soma de quantidades)
+    const totalUnidades = reportData.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+    const img = new Image(); img.src = 'logo_senai.png'; 
+
+    const render = () => {
+        doc.setFillColor(0, 51, 153); doc.rect(0, 0, 210, 45, 'F');
+        try { doc.addImage(img, 'PNG', 85, 5, 40, 15); } catch(e) {}
+        doc.setTextColor(255); doc.setFontSize(14); doc.text("CONTROLE LAB'S", 105, 30, { align: "center" });
+        doc.setFontSize(8);
+        doc.text(`EMISSÃO: ${dateStr} às ${timeStr}`, 195, 15, { align: "right" });
+        doc.text("SENAI MACAPÁ - DR-AP", 195, 20, { align: "right" });
+
+        const drawCard = (x, y, w, h, title, val, color) => {
+            doc.setFillColor(255, 255, 255); doc.setDrawColor(200, 200, 200); doc.roundedRect(x, y, w, h, 3, 3, 'FD');
+            doc.setFillColor(color[0], color[1], color[2]); doc.rect(x + 2, y + 5, 1.5, h - 10, 'F');
+            doc.setTextColor(100, 100, 100); doc.setFontSize(7); doc.text(title.toUpperCase(), x + 6, y + 10);
+            doc.setTextColor(0, 0, 0); doc.setFontSize(16); doc.text(val.toString(), x + 6, y + 20);
+        };
+
+        const tCrit = reportData.filter(i => i.quantity <= i.minQuantity).reduce((acc, curr) => acc + Number(curr.quantity), 0);
+        drawCard(15, 55, 42, 28, "Total Unidades", totalUnidades, [0, 51, 153]);
+        drawCard(62, 55, 42, 28, "Estoque Crítico", tCrit, [200, 0, 0]);
+
+        autoTable(doc, {
+            startY: 95,
+            head: [['Ativo', 'Categoria', 'Local', 'Qtd', 'Status']],
+            body: reportData.map(i => [i.name, i.category, i.lab, i.quantity, i.status]),
+            headStyles: { fillColor: [0, 51, 153] }
+        });
+
+        const sigY = doc.lastAutoTable.finalY + 30;
+        doc.line(60, sigY, 150, sigY);
+        doc.text("Responsável Técnico / Instrutor", 105, sigY + 8, { align: "center" });
+        doc.save(`Relatorio_${targetLab}.pdf`);
+    };
+    img.onload = render; img.onerror = render;
+  };
+
   const stats = useMemo(() => ({
     total: items.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0),
     lowStock: items.filter(i => i.quantity <= i.minQuantity).reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0),
@@ -207,107 +119,106 @@ const App = () => {
     ok: items.filter(i => i.status === 'Operacional' && i.quantity > i.minQuantity).reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0)
   }), [items]);
 
+  const filteredItems = useMemo(() => {
+    return items.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) && (filterLab === 'Todos' || item.lab === filterLab));
+  }, [items, searchQuery, filterLab]);
+
+  const pageNames = { dashboard: 'Painel Geral', inventory: 'Inventário de Ativos', settings: 'Configurações' };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex text-slate-900 selection:bg-blue-100 font-sans">
+    <div className={`h-screen flex font-sans transition-all duration-300 overflow-hidden ${isHighContrast ? 'bg-black text-white' : isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`} style={{ fontSize: fontSize + 'px' }}>
       
-      {/* Sidebar */}
-      <aside className={`fixed md:relative z-50 h-screen ${isSidebarOpen ? 'w-80' : 'w-24'} bg-blue-900 text-white transition-all flex flex-col shadow-2xl shrink-0 pt-2`}>
-        <div className="p-6 pb-8 flex flex-col items-start border-b border-blue-800/50 shrink-0">
-          <div className="flex items-center gap-4 w-full justify-between mb-4">
-            <div className="bg-transparent rounded-xl shrink-0 w-32 h-16 flex items-center justify-start overflow-hidden">
-              <img src={`${process.env.PUBLIC_URL}/logo_senai.png`} alt="SENAI" className="w-full h-full object-contain object-left scale-[1.8] origin-left" />
-            </div>
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 hover:bg-blue-800 rounded-lg shrink-0"><X size={20} /></button>
-          </div>
-          {isSidebarOpen && (
-            <div className="mt-6 space-y-1">
-              <span className="font-black text-3xl tracking-tighter uppercase leading-none block">Controle Lab's</span>
-              <span className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.3em] block">SENAI Macapá</span>
-            </div>
-          )}
-        </div>
+      {/* SIDEBAR */}
+      <aside className={`fixed md:relative z-[100] h-screen transition-all duration-300 flex flex-col shadow-2xl shrink-0 
+        ${isHighContrast ? 'bg-black border-r-2 border-white' : isDarkMode ? 'bg-slate-900 border-r border-slate-800' : 'bg-blue-900 text-white'} 
+        ${isSidebarOpen ? 'translate-x-0 w-80' : '-translate-x-full md:translate-x-0 md:w-24'}`}>
         
+        <div className={`p-6 border-b flex flex-col items-start gap-4 shrink-0 ${isHighContrast ? 'border-white' : 'border-white/10'}`}>
+          <div className="w-full flex justify-between items-center">
+             <div className="w-24 h-12 flex items-center justify-start overflow-hidden rounded-lg">
+                <img src={`${process.env.PUBLIC_URL}/logo_senai.png`} alt="SENAI" className="w-full h-full object-contain" style={{ filter: (!isDarkMode && !isHighContrast) ? 'invert(1)' : 'invert(0)' }} />
+             </div>
+             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 border-2 border-current rounded-xl"><X size={24}/></button>
+          </div>
+          {isSidebarOpen && <h1 className="font-black uppercase mt-2 tracking-tighter" style={{ fontSize: '1.2em' }}>Controle Lab's</h1>}
+        </div>
+
         <nav className="flex-1 p-5 space-y-2 mt-4 overflow-y-auto">
-          <NavItem icon={<LayoutDashboard size={24}/>} label="Painel Geral" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} compact={!isSidebarOpen} />
-          <NavItem icon={<Package size={24}/>} label="Inventário" active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} compact={!isSidebarOpen} />
-          <NavItem icon={<SettingsIcon size={24}/>} label="Configurações" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} compact={!isSidebarOpen} />
+          <NavItem icon={<LayoutDashboard size={24}/>} label="Painel" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); if(window.innerWidth < 768) setIsSidebarOpen(false); }} compact={!isSidebarOpen} isHC={isHighContrast} isDark={isDarkMode} />
+          <NavItem icon={<Package size={24}/>} label="Inventário" active={activeTab === 'inventory'} onClick={() => { setActiveTab('inventory'); if(window.innerWidth < 768) setIsSidebarOpen(false); }} compact={!isSidebarOpen} isHC={isHighContrast} isDark={isDarkMode} />
+          <NavItem icon={<SettingsIcon size={24}/>} label="Config" active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); if(window.innerWidth < 768) setIsSidebarOpen(false); }} compact={!isSidebarOpen} isHC={isHighContrast} isDark={isDarkMode} />
         </nav>
 
-        <div className="p-5 border-t border-blue-800/50 shrink-0 mb-2">
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-full flex items-center justify-center p-3.5 rounded-2xl hover:bg-blue-800 text-blue-300 hidden md:flex transition-colors">
+        {/* BOTÃO RECOLHER MENU (PC) */}
+        <div className="p-5 hidden md:block">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={`w-full flex items-center justify-center p-3 rounded-2xl border-2 transition-all ${isHighContrast ? 'border-white text-white' : 'border-transparent bg-white/10 text-white hover:bg-white/20'}`}>
              {isSidebarOpen ? <X size={20}/> : <Menu size={20}/>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b flex items-center justify-between px-6 md:px-10 shrink-0 sticky top-0 z-30 shadow-sm">
-          <div className="flex items-center gap-4">
-            <button className="md:hidden p-2 text-slate-600 bg-slate-100 rounded-lg" onClick={() => setIsSidebarOpen(false)}><Menu size={20} /></button>
-            <h2 className="text-xl font-bold text-slate-800 tracking-tight hidden sm:block">SENAI <span className="text-blue-600">Controle Lab's</span></h2>
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* HEADER */}
+        <header className={`h-20 border-b flex items-center justify-between px-6 md:px-10 shrink-0 sticky top-0 z-30 backdrop-blur-md ${isHighContrast ? 'bg-black border-white' : isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200'}`}>
+          <div className="w-1/4 flex items-center">
+            <button className={`p-2 rounded-lg md:hidden ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`} onClick={() => setIsSidebarOpen(true)}><Menu size={20} /></button>
           </div>
-          <div className="flex items-center gap-4 flex-1 justify-end max-w-2xl">
-            <div className="relative group w-full max-w-xs">
-              <Search className="absolute left-3 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
-              <input type="text" placeholder="Buscar ativo..." className="w-full pl-10 pr-4 py-3 bg-slate-100 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+
+          <h2 className={`w-2/4 text-center font-black uppercase tracking-widest ${isHighContrast ? 'text-yellow-400' : 'text-blue-600 dark:text-blue-400'}`} style={{ fontSize: '1.1em' }}>
+            {pageNames[activeTab]}
+          </h2>
+          
+          <div className="w-1/4 flex justify-end gap-2">
+            <div className={`flex items-center gap-1 p-1 rounded-2xl ${isHighContrast ? 'border-2 border-white' : 'bg-slate-100 dark:bg-slate-800'}`}>
+              <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-xl transition-all ${isDarkMode ? 'text-yellow-400 hover:bg-slate-700' : 'text-slate-600 hover:bg-white'}`}><Moon size={18}/></button>
+              <button onClick={() => setFontSize(f => f >= 24 ? 16 : f + 4)} className={`p-2 rounded-xl transition-all ${isDarkMode ? 'text-white hover:bg-slate-700' : 'text-slate-600 hover:bg-white'}`}><Type size={18}/></button>
+              <button onClick={() => setIsHighContrast(!isHighContrast)} className={`p-2 rounded-xl transition-all ${isHighContrast ? 'bg-yellow-400 text-black' : (isDarkMode ? 'text-white hover:bg-slate-700' : 'text-slate-600 hover:bg-white')}`}><Contrast size={18}/></button>
             </div>
-            <div className="w-11 h-11 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200 shrink-0 shadow-sm cursor-pointer hover:bg-blue-200 transition-colors"><User size={20} /></div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-10">
-          {activeTab === 'dashboard' && <Dashboard stats={stats} items={items} onExport={() => exportToPDF('Todos')} />}
+        <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-10 pb-20">
+          {activeTab === 'dashboard' && <Dashboard stats={stats} items={items} isHC={isHighContrast} isDark={isDarkMode} onExport={() => exportToPDF('Todos')} />}
           
           {activeTab === 'inventory' && (
             <div className="max-w-7xl mx-auto space-y-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl border shadow-sm w-full md:w-auto">
-                  <Filter size={16} className="text-slate-400" />
-                  <select className="bg-transparent border-none text-sm font-bold focus:ring-0 w-full cursor-pointer" value={filterLab} onChange={(e) => setFilterLab(e.target.value)}>
-                    <option value="Todos">Todos os Laboratórios</option>
+              <div className="flex flex-col md:flex-row justify-between gap-4">
+                <div className="flex flex-wrap gap-3">
+                  <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+                    <input type="text" placeholder="Buscar ativo..." className={`w-full pl-10 pr-4 py-2 border-2 rounded-xl outline-none transition-all ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 focus:border-blue-500')}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                  </div>
+                  <select className={`px-4 py-2 border-2 rounded-xl outline-none font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200')}`} value={filterLab} onChange={(e) => setFilterLab(e.target.value)}>
+                    <option value="Todos">Todos Lab's</option>
                     {labs.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
                   </select>
                 </div>
-                <div className="flex gap-3 w-full md:w-auto">
-                  <button onClick={() => exportToPDF(filterLab)} className="flex-1 md:flex-none bg-slate-800 text-white px-6 py-4 rounded-[1.2rem] font-black flex items-center justify-center gap-2 hover:bg-black transition-all shadow-lg active:scale-95 uppercase text-xs tracking-widest"><Download size={18} /> PDF {filterLab !== 'Todos' ? 'Filtrado' : ''}</button>
-                  <button onClick={() => { setEditingItem(null); setItemForm({ name: '', category: categories[0]?.name || '', lab: labs[0]?.name || '', quantity: 0, minQuantity: 0, status: 'Operacional' }); setIsItemModalOpen(true); }} className="flex-1 md:flex-none bg-blue-700 text-white px-8 py-4 rounded-[1.2rem] font-black flex items-center justify-center gap-2 hover:bg-blue-800 transition-all shadow-xl active:scale-95 uppercase tracking-widest"><Plus size={22} /> NOVO ATIVO</button>
+                <div className="flex gap-2">
+                  <button onClick={() => exportToPDF(filterLab)} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 border-2 ${isHighContrast ? 'bg-white text-black border-white' : 'bg-slate-800 text-white border-transparent'}`}><Download size={18}/> PDF</button>
+                  <button onClick={() => {setEditingItem(null); setItemForm({name:'', category:categories[0]?.name||'', lab:labs[0]?.name||'', quantity:0, minQuantity:0, status:'Operacional'}); setIsItemModalOpen(true);}} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 border-2 ${isHighContrast ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent'}`}><Plus size={18}/> NOVO</button>
                 </div>
               </div>
-              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden">
+              
+              <div className={`rounded-3xl border-2 overflow-hidden shadow-xl transition-all ${isHighContrast ? 'border-white bg-black' : (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}`}>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Item / Categoria</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Localização</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Estoque</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Status</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Ações</th>
-                      </tr>
+                  <table className="w-full text-left min-w-[600px]">
+                    <thead className={isHighContrast ? 'bg-white text-black' : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-400')}>
+                      <tr><th className="p-5 uppercase font-black text-xs">Item</th><th className="p-5 uppercase font-black text-xs text-center">Volume Físico</th><th className="p-5 uppercase font-black text-xs text-right">Ações</th></tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {filteredItems.map(item => {
-                        const isLow = item.quantity <= item.minQuantity;
-                        return (
-                          <tr key={item.id} className="group hover:bg-blue-50/30 transition-colors text-sm">
-                            <td className="px-8 py-6 font-bold text-slate-900">{item.name}<div className="text-[10px] font-black text-blue-600 uppercase mt-0.5">{item.category}</div></td>
-                            <td className="px-8 py-6 text-slate-600 font-medium">{item.lab}</td>
-                            <td className="px-8 py-6 text-center">
-                              <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl border ${isLow ? 'bg-red-50 border-red-100 text-red-700' : 'bg-slate-50 border-slate-100 text-slate-700'}`}>
-                                <span className="text-lg font-black">{item.quantity}</span><span className="text-slate-300">/</span><span className="font-bold opacity-60">{item.minQuantity}</span>
-                              </div>
-                            </td>
-                            <td className="px-8 py-6 text-center font-black text-[10px] uppercase tracking-widest">
-                               <span className={item.status === 'Manutenção' ? 'text-yellow-600' : 'text-slate-400'}>{item.status}</span>
-                            </td>
-                            <td className="px-8 py-6 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => { setEditingItem(item); setItemForm(item); setIsItemModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl mr-2 transition-all"><Edit3 size={18}/></button>
-                              <button onClick={() => deleteDoc(doc(db, "items", item.id))} className="p-2 text-red-600 hover:bg-red-100 rounded-xl transition-all"><Trash2 size={18}/></button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                    <tbody className={`divide-y-2 ${isHighContrast ? 'divide-white' : (isDarkMode ? 'divide-slate-800' : 'divide-slate-100')}`}>
+                      {filteredItems.map(item => (
+                        <tr key={item.id} className={`${isHighContrast ? 'hover:bg-yellow-900' : (isDarkMode ? 'hover:bg-slate-800/50 text-slate-300' : 'hover:bg-blue-50/20 text-slate-700')}`}>
+                          <td className="p-5 font-bold">
+                            <div className={isDarkMode && !isHighContrast ? 'text-white' : ''}>{item.name}</div>
+                            <span className={`block text-[0.7em] uppercase font-black ${isHighContrast ? 'text-yellow-400' : 'text-blue-500'}`}>{item.category} • {item.lab}</span>
+                          </td>
+                          <td className="p-5 text-center font-black">{item.quantity} / {item.minQuantity}</td>
+                          <td className="p-5 text-right">
+                             <button onClick={()=>{setItemForm(item); setEditingItem(item); setIsItemModalOpen(true);}} className="p-2 text-blue-500 hover:scale-110 transition-transform"><Edit3 size={18}/></button>
+                             <button onClick={async()=>await deleteDoc(doc(db,"items",item.id))} className="p-2 text-red-500 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -317,56 +228,37 @@ const App = () => {
 
           {activeTab === 'settings' && (
              <div className="max-w-4xl mx-auto space-y-10">
-                <ConfigSection title="Laboratórios" icon={<Building2 />} onAdd={(val) => addConfig("labs", val)} onDelete={(name, id) => setConfirmDelete({ open: true, type: 'labs', name, id })} list={labs} />
-                <ConfigSection title="Categorias de Itens" icon={<Tags />} onAdd={(val) => addConfig("categories", val)} onDelete={(name, id) => setConfirmDelete({ open: true, type: 'categories', name, id })} list={categories} color="purple" />
+                <ConfigSection title="Laboratórios" icon={<Building2 />} onAdd={(v)=>addDoc(collection(db,"labs"),{name:capitalize(v)})} onDelete={(n,id)=>setConfirmDelete({open:true, type:'labs', name:n, id})} list={labs} isHC={isHighContrast} isDark={isDarkMode} />
+                <ConfigSection title="Categorias" icon={<Tags />} onAdd={(v)=>addDoc(collection(db,"categories"),{name:capitalize(v)})} onDelete={(n,id)=>setConfirmDelete({open:true, type:'categories', name:n, id})} list={categories} isHC={isHighContrast} isDark={isDarkMode} />
              </div>
           )}
         </div>
       </main>
 
-      {confirmDelete.open && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in zoom-in duration-300">
-           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl text-center">
-              <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6"><AlertCircle size={40} /></div>
-              <h3 className="text-2xl font-black text-slate-800 mb-2">Confirmar Exclusão</h3>
-              <p className="text-slate-500 mb-8 font-medium">Tem certeza que deseja remover <span className="text-red-600 font-bold">"{confirmDelete.name}"</span>?</p>
-              <div className="flex flex-col gap-3">
-                <button onClick={executeDeleteConfig} className="w-full py-4 bg-red-600 text-white rounded-[1.2rem] font-black uppercase tracking-widest transition-all">Sim, excluir</button>
-                <button onClick={() => setConfirmDelete({ open: false, type: '', name: '', id: '' })} className="w-full py-4 bg-slate-100 text-slate-500 rounded-[1.2rem] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
-              </div>
-           </div>
-        </div>
-      )}
-
+      {/* MODAL ATIVO */}
       {isItemModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-500">
-            <div className="bg-blue-900 p-8 text-white flex justify-between items-center">
-              <div><h3 className="text-2xl font-black uppercase">Ativo</h3><p className="text-blue-300 text-[10px] font-black uppercase mt-1">Gestão Controle Lab's</p></div>
-              <button onClick={() => setIsItemModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24}/></button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className={`w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden transition-all ${isHighContrast ? 'bg-black border-2 border-white' : isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white'}`}>
+            <div className="bg-blue-900 p-6 text-white flex justify-between items-center">
+              <h3 className="font-black uppercase tracking-widest">Gestão de Ativo</h3>
+              <button onClick={()=>setIsItemModalOpen(false)}><X size={24}/></button>
             </div>
-            <form onSubmit={handleSaveItem} className="p-8 space-y-6">
-              <input required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 outline-none font-bold focus:ring-2 focus:ring-blue-500" value={itemForm.name} onChange={(e) => setItemForm({...itemForm, name: e.target.value})} placeholder="Ex: Osciloscópio Digital"/>
+            <form onSubmit={handleSaveItem} className="p-6 space-y-4">
+              <input required className={`w-full p-4 border-2 rounded-xl font-bold outline-none ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.name} onChange={e=>setItemForm({...itemForm, name:e.target.value})} placeholder="Nome do Ativo"/>
               <div className="grid grid-cols-2 gap-4">
-                <select required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 outline-none font-bold" value={itemForm.category} onChange={(e) => setItemForm({...itemForm, category: e.target.value})}>
-                  <option value="">Categoria...</option>
-                  {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                </select>
-                <select required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 outline-none font-bold" value={itemForm.status} onChange={(e) => setItemForm({...itemForm, status: e.target.value})}>
-                  <option>Operacional</option>
-                  <option>Manutenção</option>
-                  <option>Crítico</option>
-                </select>
+                <select className={`p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.category} onChange={e=>setItemForm({...itemForm, category:e.target.value})}>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                <select className={`p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.lab} onChange={e=>setItemForm({...itemForm, lab:e.target.value})}>{labs.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}</select>
               </div>
-              <select required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3.5 outline-none font-bold" value={itemForm.lab} onChange={(e) => setItemForm({...itemForm, lab: e.target.value})}>
-                <option value="">Laboratório...</option>
-                {labs.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+              <select className={`w-full p-4 border-2 rounded-xl font-bold ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.status} onChange={e=>setItemForm({...itemForm, status:e.target.value})}>
+                  <option value="Operacional">Operacional</option>
+                  <option value="Manutenção">Manutenção</option>
+                  <option value="Reserva">Reserva</option>
               </select>
-              <div className="bg-blue-50/50 p-6 rounded-[2rem] grid grid-cols-2 gap-6 border border-blue-100">
-                <div><label className="text-[10px] font-black text-blue-900 uppercase mb-2 block">Qtd. Atual</label><input type="number" className="w-full rounded-2xl px-4 py-3 font-black text-center" value={itemForm.quantity} onChange={(e) => setItemForm({...itemForm, quantity: parseInt(e.target.value) || 0})}/></div>
-                <div><label className="text-[10px] font-black text-red-700 uppercase mb-2 block">Qtd. Mínima</label><input type="number" className="w-full rounded-2xl px-4 py-3 font-black text-center" value={itemForm.minQuantity} onChange={(e) => setItemForm({...itemForm, minQuantity: parseInt(e.target.value) || 0})}/></div>
+              <div className="grid grid-cols-2 gap-4">
+                <input type="number" required className={`p-4 border-2 rounded-xl font-black ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.quantity} onChange={e=>setItemForm({...itemForm, quantity:e.target.value})} placeholder="Qtd Atual"/>
+                <input type="number" required className={`p-4 border-2 rounded-xl font-black ${isHighContrast ? 'bg-black border-white text-white' : (isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50')}`} value={itemForm.minQuantity} onChange={e=>setItemForm({...itemForm, minQuantity:e.target.value})} placeholder="Qtd Mínima"/>
               </div>
-              <button type="submit" className="w-full py-4 bg-blue-900 text-white font-black uppercase rounded-2xl shadow-xl active:scale-95 transition-all">Salvar Ativo</button>
+              <button type="submit" className={`w-full p-5 rounded-2xl font-black transition-all ${isHighContrast ? 'bg-yellow-400 text-black' : 'bg-blue-900 text-white hover:bg-blue-800'}`}>SALVAR DADOS</button>
             </form>
           </div>
         </div>
@@ -375,29 +267,30 @@ const App = () => {
   );
 };
 
-const NavItem = ({ icon, label, active, onClick, compact }) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${active ? 'bg-blue-700 text-white shadow-lg' : 'text-blue-200 hover:bg-blue-800 hover:text-white'}`}>
-    <span className="shrink-0">{icon}</span> {!compact && <span className="font-bold text-sm uppercase tracking-wide whitespace-nowrap">{label}</span>}
+// Componentes Auxiliares
+const NavItem = ({ icon, label, active, onClick, compact, isHC, isDark }) => (
+  <button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all border-2 
+    ${active 
+      ? (isHC ? 'bg-yellow-400 text-black border-white' : (isDark ? 'bg-blue-600 text-white border-transparent' : 'bg-blue-700 text-white border-transparent shadow-lg')) 
+      : (isHC ? 'text-white border-white hover:bg-yellow-900' : 'text-blue-200 border-transparent hover:bg-white/10')}`}>
+    <span className="shrink-0">{icon}</span> {!compact && <span className="font-black text-[0.85em] uppercase">{label}</span>}
   </button>
 );
 
-const ConfigSection = ({ title, icon, onAdd, onDelete, list, color="blue" }) => {
+const ConfigSection = ({ title, icon, onAdd, onDelete, list, isHC, isDark }) => {
   const [val, setVal] = useState('');
-  const handleAdd = () => { if(val.trim()){ onAdd(val); setVal(''); } };
   return (
-    <div className="bg-white p-6 md:p-10 rounded-[3rem] border border-slate-200 shadow-sm transition-all hover:shadow-md">
-      <div className="flex items-center gap-4 mb-8 font-black text-2xl text-slate-800">
-        <div className={`p-3 rounded-2xl ${color === 'purple' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>{icon}</div> {title}
+    <div className={`p-8 rounded-[3rem] border-2 shadow-xl transition-all ${isHC ? 'bg-black border-white text-white' : (isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200')}`}>
+      <div className="flex items-center gap-4 mb-8 font-black text-[1.5em]"><div className={`p-3 rounded-xl ${isHC ? 'bg-yellow-400 text-black' : 'bg-blue-100 text-blue-600'}`}>{icon}</div> {title}</div>
+      <div className="flex gap-3 mb-8">
+        <input className={`flex-1 p-4 border-2 rounded-2xl outline-none font-bold transition-all ${isHC ? 'bg-black border-white text-white' : (isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 focus:border-blue-500')}`} placeholder="Nome..." value={val} onChange={e=>setVal(e.target.value)}/>
+        <button onClick={()=>{if(val.trim()){onAdd(val);setVal('');}}} className={`px-8 rounded-2xl font-black border-2 transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-blue-700 text-white border-transparent'}`}>ADD</button>
       </div>
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
-        <input className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 outline-none font-bold" placeholder={`Nome...`} value={val} onChange={(e) => setVal(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAdd()}/>
-        <button onClick={handleAdd} className={`px-8 py-4 sm:py-0 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95 uppercase tracking-widest whitespace-nowrap ${color === 'purple' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-700 hover:bg-blue-800'}`}>CADASTRAR</button>
-      </div>
-      <div className="flex flex-wrap gap-4">
-        {list.map((item) => (
-          <div key={item.id} className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border-2 border-slate-100 hover:border-red-200 transition-all group shadow-sm">
-            <span className="font-bold text-slate-700">{item.name}</span>
-            <button onClick={() => onDelete(item.name, item.id)} className="w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center hover:bg-red-600 hover:text-white transition-all"><X size={14} /></button>
+      <div className="flex flex-wrap gap-3">
+        {list.map(i => (
+          <div key={i.id} className={`flex items-center gap-4 px-5 py-3 rounded-2xl border-2 transition-all ${isHC ? 'border-white hover:border-yellow-400' : (isDark ? 'border-slate-800 bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-700')}`}>
+            <span className="font-black text-[0.8em]">{i.name}</span>
+            <button onClick={()=>onDelete(i.name, i.id)} className="text-red-500 hover:scale-125 transition-transform"><X size={18}/></button>
           </div>
         ))}
       </div>
@@ -405,27 +298,30 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, color="blue" }) => 
   );
 };
 
-const Dashboard = ({ stats, items, onExport }) => (
+const Dashboard = ({ stats, items, isHC, isDark, onExport }) => (
   <div className="space-y-10 max-w-7xl mx-auto">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 px-2 gap-4">
-        <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Status Operacional</h3>
-        <button onClick={onExport} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-2xl font-black hover:bg-black transition-all shadow-lg active:scale-95 uppercase text-xs tracking-widest"><Download size={18} /> Relatório Geral</button>
+    <div className="flex justify-between items-center px-2">
+        <h3 className={`font-black uppercase tracking-tighter ${isDark && !isHC ? 'text-white' : ''}`} style={{ fontSize: '1.5em' }}>Resumo Geral</h3>
+        <button onClick={onExport} className={`p-4 rounded-2xl border-2 shadow-lg transition-all ${isHC ? 'bg-yellow-400 text-black border-white' : 'bg-slate-900 text-white border-transparent hover:bg-black'}`}><Download size={24}/></button>
     </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-      <StatCard title="Total Unidades" value={stats.total} icon={<Package size={26}/>} color="blue" />
-      <StatCard title="Qtd. Crítica" value={stats.lowStock} icon={<AlertTriangle size={26}/>} color="red" />
-      <StatCard title="Manutenção" value={stats.maintenance} icon={<Wrench size={26}/>} color="yellow" />
-      <StatCard title="Operacionais" value={stats.ok} icon={<CheckCircle2 size={26}/>} color="green" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <StatCard title="Unidades Totais" value={stats.total} icon={<Package size={26}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Estoque Crítico" value={stats.lowStock} icon={<AlertTriangle size={26}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Manutenção" value={stats.maintenance} icon={<Wrench size={26}/>} isHC={isHC} isDark={isDark} />
+      <StatCard title="Operacionais" value={stats.ok} icon={<CheckCircle2 size={26}/>} isHC={isHC} isDark={isDark} />
     </div>
-    <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-200 shadow-xl relative overflow-hidden transition-all hover:shadow-2xl">
-      <h3 className="font-black text-2xl mb-8 text-slate-800 flex items-center gap-4 uppercase tracking-tighter"><AlertCircle size={30} className="text-red-600" /> Reposição Urgente</h3>
+    <div className={`p-8 md:p-12 rounded-[3.5rem] border-2 shadow-2xl transition-all ${isHC ? 'bg-black border-white' : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}`}>
+      <h3 className={`font-black mb-8 uppercase flex items-center gap-4 ${isHC ? 'text-yellow-400' : 'text-red-500'}`} style={{ fontSize: '1.5em' }}><AlertCircle size={32}/> Reposição Urgente</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {items.filter(i => i.quantity <= i.minQuantity).map(item => (
-          <div key={item.id} className="p-6 bg-slate-50 rounded-[2rem] border-2 border-white flex flex-col justify-between transition-all hover:scale-[1.03] shadow-sm hover:shadow-lg">
-            <div className="mb-4"><p className="font-black text-slate-900 text-lg mb-1">{item.name}</p><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.lab}</p></div>
-            <div className="flex items-end justify-between border-t border-slate-200 pt-4">
-              <div><span className="text-3xl font-black text-red-600">{item.quantity}</span><span className="text-slate-400 text-xs font-bold block">No estoque</span></div>
-              <div className="text-right"><span className="text-xl font-black text-slate-300">/ {item.minQuantity}</span><span className="text-slate-400 text-xs font-bold block">Mínimo</span></div>
+          <div key={item.id} className={`p-6 rounded-[2.5rem] border-2 flex flex-col justify-between transition-all hover:scale-[1.03] ${isHC ? 'border-white bg-black' : (isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 shadow-sm border-white')}`}>
+            <div>
+              <div className="font-black text-[1.1em]">{item.name}</div>
+              <div className={`text-[0.6em] uppercase font-black tracking-widest ${isHC ? 'text-yellow-400' : 'text-slate-500 dark:text-slate-400'}`}>{item.lab}</div>
+            </div>
+            <div className={`mt-4 pt-4 border-t-2 flex justify-between ${isHC ? 'border-white' : 'border-current opacity-20'}`}>
+              <span className={`text-2xl font-black ${isHC ? 'text-yellow-400' : 'text-red-500'}`}>{item.quantity}</span>
+              <span className={`text-[0.6em] font-black uppercase self-end ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Mín: {item.minQuantity}</span>
             </div>
           </div>
         ))}
@@ -434,14 +330,11 @@ const Dashboard = ({ stats, items, onExport }) => (
   </div>
 );
 
-const StatCard = ({ title, value, icon, color }) => {
-  const styles = { blue: 'bg-blue-50 text-blue-600 border-blue-100', red: 'bg-red-50 text-red-600 border-red-100', yellow: 'bg-yellow-50 text-yellow-600 border-yellow-100', green: 'bg-green-50 text-green-700 border-green-100' };
-  return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex items-start justify-between hover:shadow-xl hover:translate-y-[-4px] transition-all group cursor-default">
-      <div><p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">{title}</p><p className="text-4xl font-black text-slate-800">{value}</p></div>
-      <div className={`p-4 rounded-[1.2rem] border transition-all group-hover:scale-110 shadow-sm ${styles[color]}`}>{icon}</div>
-    </div>
-  );
-};
+const StatCard = ({ title, value, icon, isHC, isDark }) => (
+  <div className={`p-8 rounded-[3rem] border-2 shadow-md flex items-start justify-between transition-all hover:shadow-xl ${isHC ? 'bg-black border-white' : (isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200')}`}>
+    <div><p className={`text-[0.6em] font-black uppercase mb-3 ${isHC ? 'text-yellow-400' : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{title}</p><p className="font-black" style={{ fontSize: '2.5em' }}>{value}</p></div>
+    <div className={`p-5 rounded-[1.5rem] transition-all ${isHC ? 'bg-white text-black' : (isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600')}`}>{icon}</div>
+  </div>
+);
 
 export default App;
