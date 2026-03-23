@@ -14,27 +14,6 @@ suporte estratégico à tomada de decisão institucional.
 
 ## 📸 Demonstração do Sistema
 
-  ---------------------------------------------------------------------------------------
-            Dashboard Operacional                       Inventário e Filtros
-  ----------------------------------------- ---------------------------------------------
-                 ![Dashboard                                ![Inventário
-   Geral](public/screenshot-dashboard.png)   Filtrado](public/screenshot-inventario.png)
-
-   *Visão em tempo real do volume total de     *Gestão de inventário com padronização
-     unidades e saúde dos laboratórios.*         automática e filtros inteligentes.*
-  ---------------------------------------------------------------------------------------
-
-  ----------------------------------------------------------------------------
-             Cadastro de Ativos                 Relatório Executivo (PDF)
-  ---------------------------------------- -----------------------------------
-                  ![Modal                              ![Relatório
-   Cadastro](public/screenshot-modal.png)    PDF](public/screenshot-pdf.png)
-
-    *Interface intuitiva com controle de       *Documento oficial com logo
-              estoque mínimo.*                   institucional e área de
-                                                      assinatura.*
-  ----------------------------------------------------------------------------
-
 ------------------------------------------------------------------------
 
 ## 🚀 Funcionalidades Principais
@@ -130,21 +109,6 @@ O sistema estará disponível em: http://localhost:3000
   npm start        Inicia o ambiente de desenvolvimento
   npm run build    Gera a versão otimizada do projeto
   npm run deploy   Realiza o deploy para GitHub Pages
-
-------------------------------------------------------------------------
-
-## 📁 Estrutura das Imagens
-
-Coloque as imagens dentro da pasta:
-
-/public
-
-Com os nomes:
-
-screenshot-dashboard.png\
-screenshot-inventario.png\
-screenshot-modal.png\
-screenshot-pdf.png
 
 ------------------------------------------------------------------------
 
