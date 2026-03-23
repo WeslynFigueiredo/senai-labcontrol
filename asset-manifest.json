@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/senai-labcontrol/static/css/main.e6c13ad2.css",
+    "main.css": "/senai-labcontrol/static/css/main.aa9c9b80.css",
     "main.js": "/senai-labcontrol/static/js/main.d83f3160.js",
     "static/js/453.ec982600.chunk.js": "/senai-labcontrol/static/js/453.ec982600.chunk.js",
     "index.html": "/senai-labcontrol/index.html",
-    "main.e6c13ad2.css.map": "/senai-labcontrol/static/css/main.e6c13ad2.css.map",
+    "main.aa9c9b80.css.map": "/senai-labcontrol/static/css/main.aa9c9b80.css.map",
     "main.d83f3160.js.map": "/senai-labcontrol/static/js/main.d83f3160.js.map",
     "453.ec982600.chunk.js.map": "/senai-labcontrol/static/js/453.ec982600.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.e6c13ad2.css",
+    "static/css/main.aa9c9b80.css",
     "static/js/main.d83f3160.js"
   ]
 }
