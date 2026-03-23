@@ -84,27 +84,34 @@ const App = () => {
     await addDoc(collection(db, type), { name: name.trim() });
   };
 
-  const deleteConfig = async (type, name) => {
-    // Validação de Integridade: Verifica se o nome está em uso no inventário
-    const isBeingUsed = items.some(item => 
-      type === 'labs' ? item.lab === name : item.category === name
-    );
+const deleteConfig = async (type, name) => {
+  // Verifica se existe algum item no inventário que usa esse Lab ou Categoria
+  const isBeingUsed = items.some(item => 
+    type === 'labs' ? item.lab === name : item.category === name
+  );
 
-    if (isBeingUsed) {
-      alert(`Bloqueio de Segurança: Não é possível excluir "${name}" porque existem itens vinculados a ele no Inventário.`);
-      return;
-    }
+  if (isBeingUsed) {
+    alert(`ERRO DE SEGURANÇA: O ${type === 'labs' ? 'Laboratório' : 'Categoria'} "${name}" possui itens vinculados no inventário e não pode ser removido.`);
+    return;
+  }
 
-    if (window.confirm(`Confirmar exclusão de ${type === 'labs' ? 'Laboratório' : 'Categoria'}: "${name}"?`)) {
-      try {
-        const querySnapshot = await getDocs(collection(db, type));
-        const docToDelete = querySnapshot.docs.find(d => d.data().name === name);
-        if (docToDelete) {
-          await deleteDoc(doc(db, type, docToDelete.id));
-        }
-      } catch (e) { console.error("Erro ao excluir configuração:", e); }
+  if (window.confirm(`Deseja remover "${name}" das configurações?`)) {
+    try {
+      // Busca o documento pelo campo "name" para deletar
+      const q = query(collection(db, type), where("name", "==", name));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach(async (docSnapshot) => {
+        await deleteDoc(doc(db, type, docSnapshot.id));
+      });
+      
+      console.log(`${name} removido com sucesso.`);
+    } catch (e) {
+      console.error("Erro ao deletar:", e);
+      alert("Erro ao tentar excluir no Firebase.");
     }
-  };
+  }
+};
 
   // --- LÓGICA DE FILTRO E STATS ---
   const filteredItems = useMemo(() => {
@@ -239,7 +246,7 @@ const App = () => {
                   title="Laboratórios" 
                   icon={<Building2 />} 
                   onAdd={(val) => addConfig("labs", val)} 
-                  onDelete={(name) => deleteConfig("labs", name)}
+                  onDelete={(name) => deleteConfig("labs", name)} // <-- ESSA LINHA É CRUCIAL
                   list={labs} 
                 />
                 <ConfigSection 
@@ -336,6 +343,7 @@ const NavItem = ({ icon, label, active, onClick, compact }) => (
 const ConfigSection = ({ title, icon, onAdd, onDelete, list, color="blue" }) => {
   const [val, setVal] = useState('');
   const handleAdd = () => { if(val.trim()){ onAdd(val); setVal(''); } };
+
   return (
     <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-md">
       <div className="flex items-center gap-4 mb-8 font-black text-2xl text-slate-800 tracking-tight">
@@ -345,7 +353,7 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, color="blue" }) => 
       <div className="flex gap-3 mb-8">
         <input 
           className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-blue-500 font-bold" 
-          placeholder={`Nome do novo ${title.toLowerCase()}...`} 
+          placeholder={`Novo ${title.toLowerCase()}...`} 
           value={val} onChange={(e) => setVal(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
         />
@@ -353,9 +361,15 @@ const ConfigSection = ({ title, icon, onAdd, onDelete, list, color="blue" }) => 
       </div>
       <div className="flex flex-wrap gap-3">
         {list.map((item, index) => (
-          <div key={index} className="flex items-center gap-3 bg-slate-50 text-slate-700 px-5 py-2.5 rounded-2xl border border-slate-200 group transition-all hover:border-red-300 hover:bg-red-50/30">
+          <div key={index} className="flex items-center gap-2 bg-slate-100 text-slate-700 pl-4 pr-2 py-2 rounded-xl border border-slate-200 group">
             <span className="font-bold">{item}</span>
-            <button onClick={() => onDelete(item)} className="text-slate-300 hover:text-red-600 transition-colors"><Trash2 size={16}/></button>
+            <button 
+              onClick={() => onDelete(item)} 
+              className="p-1 hover:bg-red-500 hover:text-white text-slate-400 rounded-lg transition-all"
+              title="Remover"
+            >
+              <X size={14} />
+            </button>
           </div>
         ))}
       </div>
